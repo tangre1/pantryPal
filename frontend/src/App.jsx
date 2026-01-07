@@ -11,6 +11,11 @@ function App() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // For image → JSON flow
+  const [imageResult, setImageResult] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
   const messagesEndRef = useRef(null);
 
   // Auto-scroll to the bottom when messages change
@@ -42,11 +47,10 @@ function App() {
         body: JSON.stringify({ message: text }),
       });
 
-      if (!res.ok) {
-        throw new Error("Request failed");
-      }
+      if (!res.ok) throw new Error("Request failed");
 
       const data = await res.json();
+
       const botMessage = {
         id: Date.now() + 1,
         role: "assistant",
@@ -70,28 +74,73 @@ function App() {
     }
   };
 
+  const handleImageChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setImageResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("http://localhost:8000/api/image-to-json", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error("Image upload failed");
+      }
+
+      const data = await res.json(); // { data: { items: [...] } }
+      setImageResult(data.data);
+
+      // Also add a message summarizing what we found
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          role: "assistant",
+          content:
+            "I analyzed the image and extracted these items:\n" +
+            JSON.stringify(data.data, null, 2),
+        },
+      ]);
+    } catch (err) {
+      console.error(err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now() + 1,
+          role: "assistant",
+          content:
+            "⚠️ I couldn't process that image. Please try again with a clearer photo.",
+        },
+      ]);
+    } finally {
+      setUploading(false);
+      // Optional: clear file input so same file can be chosen again if desired
+      e.target.value = null;
+    }
+  };
+
   return (
     <div
       style={{
-        minHeight: "100vh",
+        width: "100vw",
+        height: "100vh",
         display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
         background: "#f3f4f6",
-        padding: "1rem",
       }}
     >
       <div
         style={{
-          width: "100%",
-          maxWidth: "800px",
-          height: "80vh",
-          background: "#ffffff",
-          borderRadius: "16px",
-          boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
+          flex: 1,
           display: "flex",
           flexDirection: "column",
-          overflow: "hidden",
+          background: "#ffffff",
         }}
       >
         {/* Header */}
@@ -119,20 +168,50 @@ function App() {
               Grocery & meal planning assistant
             </p>
           </div>
-          <span
+
+          <div
             style={{
-              fontSize: "0.75rem",
-              padding: "0.25rem 0.6rem",
-              borderRadius: "999px",
-              background: "#e5f2ff",
-              color: "#2563eb",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
             }}
           >
-            beta
-          </span>
+            <span
+              style={{
+                fontSize: "0.75rem",
+                padding: "0.25rem 0.6rem",
+                borderRadius: "999px",
+                background: "#e5f2ff",
+                color: "#2563eb",
+              }}
+            >
+              beta
+            </span>
+
+            {/* Image upload */}
+            <label
+              style={{
+                fontSize: "0.8rem",
+                padding: "0.25rem 0.6rem",
+                borderRadius: "999px",
+                border: "1px solid #d1d5db",
+                background: "#ffffff",
+                cursor: uploading ? "default" : "pointer",
+                opacity: uploading ? 0.6 : 1,
+              }}
+            >
+              {uploading ? "Analyzing..." : "Upload image"}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                style={{ display: "none" }}
+              />
+            </label>
+          </div>
         </header>
 
-        {/* Messages area */}
+        {/* Messages Area */}
         <div
           style={{
             flex: 1,
@@ -167,6 +246,7 @@ function App() {
               </div>
             </div>
           ))}
+
           {loading && (
             <div
               style={{
@@ -178,10 +258,28 @@ function App() {
               PantryPal is thinking…
             </div>
           )}
+
+          {/* Optional JSON preview for last image result */}
+          {imageResult && (
+            <pre
+              style={{
+                marginTop: "0.75rem",
+                padding: "0.5rem",
+                background: "#111827",
+                color: "#e5e7eb",
+                borderRadius: "8px",
+                fontSize: "0.75rem",
+                overflowX: "auto",
+              }}
+            >
+              {JSON.stringify(imageResult, null, 2)}
+            </pre>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input area */}
+        {/* Input */}
         <form
           onSubmit={sendMessage}
           style={{
@@ -202,12 +300,6 @@ function App() {
               placeholder='Ask: "Make a grocery list for taco night"'
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  // prevent newline on Enter
-                  // (we’re using a single-line input here)
-                }
-              }}
               style={{
                 flex: 1,
                 padding: "0.6rem 0.8rem",
@@ -217,6 +309,7 @@ function App() {
                 outline: "none",
               }}
             />
+
             <button
               type="submit"
               disabled={loading || !input.trim()}
