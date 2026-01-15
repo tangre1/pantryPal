@@ -474,3 +474,13 @@ def get_shopping_list(list_id: int, session: Session = Depends(get_session)):
         "derived_from": sl.derived_from,
         "created_at": sl.created_at,
     }
+
+@app.delete("/api/snapshots/{snapshot_id}")
+def delete_snapshot(snapshot_id: int, session: Session = Depends(get_session)):
+    snap = session.get(FridgeSnapshot, snapshot_id)
+    if not snap:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    session.delete(snap)
+    session.commit()
+    return {"ok": True}
