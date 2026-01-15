@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 
+const API_BASE = "http://localhost:8000";
+
 function App() {
   const [messages, setMessages] = useState([
     {
@@ -16,6 +18,10 @@ function App() {
   const [imageResult, setImageResult] = useState(null);
   const [uploading, setUploading] = useState(false);
 
+  // Snapshot history
+  const [snapshots, setSnapshots] = useState([]);
+  const [loadingSnapshots, setLoadingSnapshots] = useState(false);
+
   const messagesEndRef = useRef(null);
 
   // Auto-scroll to the bottom when messages change
@@ -25,15 +31,36 @@ function App() {
     }
   }, [messages]);
 
-  const sendMessage = async (e) => {
-    e.preventDefault();
-    const text = input.trim();
-    if (!text || loading) return;
+  // Fetch snapshot history
+  const fetchSnapshots = async () => {
+    setLoadingSnapshots(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/snapshots`);
+      if (!res.ok) throw new Error("Failed to fetch snapshots");
+      const data = await res.json();
+      setSnapshots(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+      setSnapshots([]);
+    } finally {
+      setLoadingSnapshots(false);
+    }
+  };
+
+  // Load snapshots on mount
+  useEffect(() => {
+    fetchSnapshots();
+  }, []);
+
+  // Send any text to chat (shared by form submit + snapshot button)
+  const sendTextToChat = async (text) => {
+    const trimmed = (text || "").trim();
+    if (!trimmed || loading) return;
 
     const userMessage = {
       id: Date.now(),
       role: "user",
-      content: text,
+      content: trimmed,
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -41,10 +68,10 @@ function App() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/api/chat", {
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: trimmed }),
       });
 
       if (!res.ok) throw new Error("Request failed");
@@ -74,6 +101,11 @@ function App() {
     }
   };
 
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    await sendTextToChat(input);
+  };
+
   const handleImageChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -85,19 +117,16 @@ function App() {
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await fetch("http://localhost:8000/api/image-to-json", {
+      const res = await fetch(`${API_BASE}/api/image-to-json`, {
         method: "POST",
         body: formData,
       });
 
-      if (!res.ok) {
-        throw new Error("Image upload failed");
-      }
+      if (!res.ok) throw new Error("Image upload failed");
 
-      const data = await res.json(); // { data: { items: [...] } }
+      const data = await res.json(); // { data: {...}, snapshot_id: number }
       setImageResult(data.data);
 
-      // Also add a message summarizing what we found
       setMessages((prev) => [
         ...prev,
         {
@@ -108,6 +137,9 @@ function App() {
             JSON.stringify(data.data, null, 2),
         },
       ]);
+
+      // Refresh history so the new snapshot shows up
+      await fetchSnapshots();
     } catch (err) {
       console.error(err);
       setMessages((prev) => [
@@ -121,9 +153,36 @@ function App() {
       ]);
     } finally {
       setUploading(false);
-      // Optional: clear file input so same file can be chosen again if desired
       e.target.value = null;
     }
+  };
+
+  const formatDateTime = (isoString) => {
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleString();
+    } catch {
+      return isoString;
+    }
+  };
+
+  const handleUseSnapshot = async (snap) => {
+    const items = snap?.data?.items || [];
+    const itemsPretty = JSON.stringify(items, null, 2);
+
+    const prompt = `
+I scanned my fridge/pantry and these items were detected:
+
+${itemsPretty}
+
+Please do the following:
+1) Suggest 3 dinner ideas that mostly use what I already have.
+2) For each dinner, list "Already have" vs "Need to buy".
+3) Give me one combined grocery list of missing items, grouped by category.
+Keep it concise and practical.
+`.trim();
+
+    await sendTextToChat(prompt);
   };
 
   return (
@@ -133,8 +192,120 @@ function App() {
         height: "100vh",
         display: "flex",
         background: "#f3f4f6",
+        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
       }}
     >
+      {/* Sidebar (history) */}
+      <aside
+        style={{
+          width: "280px",
+          borderRight: "1px solid #e5e7eb",
+          background: "#ffffff",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <div
+          style={{
+            padding: "0.9rem 1rem",
+            borderBottom: "1px solid #e5e7eb",
+            background: "#f9fafb",
+          }}
+        >
+          <h2 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700 }}>
+            History
+          </h2>
+          <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem", color: "#6b7280" }}>
+            Saved fridge/receipt scans
+          </p>
+        </div>
+
+        <div style={{ padding: "0.75rem 1rem" }}>
+          <button
+            onClick={fetchSnapshots}
+            style={{
+              width: "100%",
+              borderRadius: "10px",
+              border: "1px solid #d1d5db",
+              padding: "0.55rem 0.7rem",
+              background: "#ffffff",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+            }}
+          >
+            Refresh
+          </button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 1rem 1rem" }}>
+          {loadingSnapshots && (
+            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
+              Loading scans…
+            </div>
+          )}
+
+          {!loadingSnapshots && snapshots.length === 0 && (
+            <div style={{ fontSize: "0.85rem", color: "#9ca3af" }}>
+              No scans yet. Upload an image to create one.
+            </div>
+          )}
+
+          {snapshots.map((snap) => (
+            <div
+              key={snap.id}
+              style={{
+                border: "1px solid #e5e7eb",
+                borderRadius: "12px",
+                padding: "0.75rem",
+                marginBottom: "0.75rem",
+                background: "#ffffff",
+                boxShadow: "0 6px 16px rgba(0,0,0,0.04)",
+              }}
+            >
+              <div
+                style={{
+                  fontWeight: 700,
+                  fontSize: "0.85rem",
+                  color: "#111827",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={snap.label}
+              >
+                {snap.label || `Snapshot #${snap.id}`}
+              </div>
+
+              <div style={{ marginTop: "0.25rem", fontSize: "0.75rem", color: "#6b7280" }}>
+                {formatDateTime(snap.created_at)}
+              </div>
+
+              <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#6b7280" }}>
+                Items: {snap?.data?.items?.length ?? 0}
+              </div>
+
+              <button
+                onClick={() => handleUseSnapshot(snap)}
+                style={{
+                  marginTop: "0.6rem",
+                  width: "100%",
+                  borderRadius: "999px",
+                  border: "none",
+                  padding: "0.5rem 0.8rem",
+                  background: "#2563eb",
+                  color: "#ffffff",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                }}
+              >
+                Use this scan
+              </button>
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      {/* Main chat panel */}
       <div
         style={{
           flex: 1,
@@ -155,27 +326,15 @@ function App() {
           }}
         >
           <div>
-            <h1 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>
+            <h1 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700 }}>
               PantryPal
             </h1>
-            <p
-              style={{
-                margin: 0,
-                fontSize: "0.8rem",
-                color: "#6b7280",
-              }}
-            >
+            <p style={{ margin: 0, fontSize: "0.8rem", color: "#6b7280" }}>
               Grocery & meal planning assistant
             </p>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <span
               style={{
                 fontSize: "0.75rem",
@@ -188,7 +347,6 @@ function App() {
               beta
             </span>
 
-            {/* Image upload */}
             <label
               style={{
                 fontSize: "0.8rem",
@@ -225,8 +383,7 @@ function App() {
               key={m.id}
               style={{
                 display: "flex",
-                justifyContent:
-                  m.role === "user" ? "flex-end" : "flex-start",
+                justifyContent: m.role === "user" ? "flex-end" : "flex-start",
                 marginBottom: "0.5rem",
               }}
             >
@@ -237,8 +394,7 @@ function App() {
                   borderRadius: "12px",
                   fontSize: "0.9rem",
                   whiteSpace: "pre-wrap",
-                  background:
-                    m.role === "user" ? "#2563eb" : "#e5e7eb",
+                  background: m.role === "user" ? "#2563eb" : "#e5e7eb",
                   color: m.role === "user" ? "#ffffff" : "#111827",
                 }}
               >
@@ -248,13 +404,7 @@ function App() {
           ))}
 
           {loading && (
-            <div
-              style={{
-                fontSize: "0.8rem",
-                color: "#6b7280",
-                marginTop: "0.25rem",
-              }}
-            >
+            <div style={{ fontSize: "0.8rem", color: "#6b7280", marginTop: "0.25rem" }}>
               PantryPal is thinking…
             </div>
           )}
@@ -288,13 +438,7 @@ function App() {
             background: "#f9fafb",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              gap: "0.5rem",
-              alignItems: "center",
-            }}
-          >
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
             <input
               type="text"
               placeholder='Ask: "Make a grocery list for taco night"'
