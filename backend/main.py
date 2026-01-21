@@ -68,12 +68,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 # Create DB tables on startup
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
-
 
 # --------------------------
 # Pydantic models
@@ -121,12 +119,43 @@ class CreateRecipe(BaseModel):
     source: str = "manual"
 
 
+class RecipeOut(BaseModel):
+    id: int
+    user_id: int | None
+    title: str
+    tags: list[str]
+    ingredients: list[dict]
+    steps: list[str]
+    source: str
+    created_at: datetime
+
+
+class UpdateRecipe(BaseModel):
+    title: str | None = None
+    tags: list[str] | None = None
+    ingredients: list[dict] | None = None
+    steps: list[str] | None = None
+    source: str | None = None
+
+
 class CreateShoppingList(BaseModel):
     user_id: int | None = None
     title: str = "Shopping List"
     items: Dict[str, Any] = {"items": []}
     derived_from: str = ""
 
+
+def _recipe_to_out(r: Recipe) -> RecipeOut:
+    return RecipeOut(
+        id=r.id,
+        user_id=r.user_id,
+        title=r.title,
+        tags=[t for t in (r.tags or "").split(",") if t],
+        ingredients=json.loads(r.ingredients_json or "[]"),
+        steps=json.loads(r.steps_json or "[]"),
+        source=r.source,
+        created_at=r.created_at,
+    )
 
 # --------------------------
 # Endpoints
@@ -139,7 +168,6 @@ def health_check():
         "azure_endpoint_set": bool(AZURE_OPENAI_ENDPOINT),
         "deployment": AZURE_OPENAI_DEPLOYMENT,
     }
-
 
 # --------------------------
 # Chat
@@ -184,7 +212,6 @@ def chat(body: ChatRequest):
             )
         )
 
-
 # --------------------------
 # Vision -> JSON (and save snapshot)
 # --------------------------
@@ -204,18 +231,17 @@ async def image_to_json(
             "or similar. You must respond with STRICT JSON only, no explanation, "
             "matching this exact schema:\n\n"
             "{\n"
-            '  \"items\": [\n'
+            '  "items": [\n'
             "    {\n"
-            '      \"name\": string,\n'
-            '      \"category\": string,\n'
-            '      \"estimated_quantity\": number | null,\n'
-            '      \"unit\": string | null,\n'
-            '      \"notes\": string | null\n'
+            '      "name": string,\n'
+            '      "category": string,\n'
+            '      "estimated_quantity": number | null,\n'
+            '      "unit": string | null,\n'
+            '      "notes": string | null\n'
             "    }\n"
             "  ]\n"
             "}\n\n"
-            "If you cannot read the image or no grocery items are present, "
-            "return {\"items\": []}."
+            'If you cannot read the image or no grocery items are present, return {"items": []}.'
         )
 
         response = client.chat.completions.create(
@@ -259,7 +285,6 @@ async def image_to_json(
         print("Azure OpenAI image error:", e)
         return ImageJsonResponse(data={"items": []}, snapshot_id=None)
 
-
 @app.get("/api/snapshots", response_model=List[SnapshotOut])
 def list_snapshots(session: Session = Depends(get_session)):
     snapshots = session.exec(
@@ -302,6 +327,15 @@ def get_snapshot(snapshot_id: int, session: Session = Depends(get_session)):
         "data": data,
     }
 
+@app.delete("/api/snapshots/{snapshot_id}")
+def delete_snapshot(snapshot_id: int, session: Session = Depends(get_session)):
+    snap = session.get(FridgeSnapshot, snapshot_id)
+    if not snap:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    session.delete(snap)
+    session.commit()
+    return {"ok": True}
 
 # --------------------------
 # Users
@@ -319,7 +353,6 @@ def create_user(body: CreateUser, session: Session = Depends(get_session)):
     session.refresh(user)
     return {"id": user.id}
 
-
 @app.get("/api/users/{user_id}")
 def get_user(user_id: int, session: Session = Depends(get_session)):
     user = session.get(UserProfile, user_id)
@@ -334,7 +367,6 @@ def get_user(user_id: int, session: Session = Depends(get_session)):
         "household_size": user.household_size,
         "created_at": user.created_at,
     }
-
 
 @app.patch("/api/users/{user_id}")
 def update_user(user_id: int, body: UpdateUser, session: Session = Depends(get_session)):
@@ -353,13 +385,13 @@ def update_user(user_id: int, body: UpdateUser, session: Session = Depends(get_s
 
     session.add(user)
     session.commit()
+    session.refresh(user)
     return {"ok": True}
-
 
 # --------------------------
 # Recipes
 # --------------------------
-@app.post("/api/recipes")
+@app.post("/api/recipes", response_model=Dict[str, int])
 def create_recipe(body: CreateRecipe, session: Session = Depends(get_session)):
     recipe = Recipe(
         user_id=body.user_id,
@@ -374,51 +406,63 @@ def create_recipe(body: CreateRecipe, session: Session = Depends(get_session)):
     session.refresh(recipe)
     return {"id": recipe.id}
 
+@app.get("/api/recipes", response_model=List[RecipeOut])
+def list_recipes(
+    q: str | None = None,
+    user_id: int | None = None,
+    session: Session = Depends(get_session),
+):
+    stmt = select(Recipe)
 
-@app.get("/api/recipes")
-def list_recipes(q: str | None = None, user_id: int | None = None, session: Session = Depends(get_session)):
-    stmt = select(Recipe).order_by(Recipe.created_at.desc())
+    if user_id is not None:
+        stmt = stmt.where(Recipe.user_id == user_id)
+
+    if q:
+        stmt = stmt.where(Recipe.title.ilike(f"%{q}%"))
+
+    stmt = stmt.order_by(Recipe.created_at.desc())
+
     recipes = session.exec(stmt).all()
+    return [_recipe_to_out(r) for r in recipes]
 
-    out = []
-    for r in recipes:
-        if user_id is not None and r.user_id != user_id:
-            continue
-        if q and q.lower() not in r.title.lower():
-            continue
-
-        out.append(
-            {
-                "id": r.id,
-                "user_id": r.user_id,
-                "title": r.title,
-                "tags": [t for t in (r.tags or "").split(",") if t],
-                "ingredients": json.loads(r.ingredients_json or "[]"),
-                "steps": json.loads(r.steps_json or "[]"),
-                "source": r.source,
-                "created_at": r.created_at,
-            }
-        )
-    return out
-
-
-@app.get("/api/recipes/{recipe_id}")
+@app.get("/api/recipes/{recipe_id}", response_model=RecipeOut)
 def get_recipe(recipe_id: int, session: Session = Depends(get_session)):
     r = session.get(Recipe, recipe_id)
     if not r:
         raise HTTPException(status_code=404, detail="Not Found")
+    return _recipe_to_out(r)
 
-    return {
-        "id": r.id,
-        "user_id": r.user_id,
-        "title": r.title,
-        "tags": [t for t in (r.tags or "").split(",") if t],
-        "ingredients": json.loads(r.ingredients_json or "[]"),
-        "steps": json.loads(r.steps_json or "[]"),
-        "source": r.source,
-        "created_at": r.created_at,
-    }
+@app.patch("/api/recipes/{recipe_id}", response_model=RecipeOut)
+def update_recipe(recipe_id: int, body: UpdateRecipe, session: Session = Depends(get_session)):
+    r = session.get(Recipe, recipe_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="Not Found")
 
+    if body.title is not None:
+        r.title = body.title
+    if body.tags is not None:
+        r.tags = ",".join(body.tags)
+    if body.ingredients is not None:
+        r.ingredients_json = json.dumps(body.ingredients)
+    if body.steps is not None:
+        r.steps_json = json.dumps(body.steps)
+    if body.source is not None:
+        r.source = body.source
+
+    session.add(r)
+    session.commit()
+    session.refresh(r)
+    return _recipe_to_out(r)
+
+@app.delete("/api/recipes/{recipe_id}")
+def delete_recipe(recipe_id: int, session: Session = Depends(get_session)):
+    r = session.get(Recipe, recipe_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    session.delete(r)
+    session.commit()
+    return {"ok": True}
 
 # --------------------------
 # Shopping Lists (History)
@@ -435,7 +479,6 @@ def create_shopping_list(body: CreateShoppingList, session: Session = Depends(ge
     session.commit()
     session.refresh(sl)
     return {"id": sl.id}
-
 
 @app.get("/api/shopping-lists")
 def list_shopping_lists(user_id: int | None = None, session: Session = Depends(get_session)):
@@ -459,7 +502,6 @@ def list_shopping_lists(user_id: int | None = None, session: Session = Depends(g
         )
     return out
 
-
 @app.get("/api/shopping-lists/{list_id}")
 def get_shopping_list(list_id: int, session: Session = Depends(get_session)):
     sl = session.get(ShoppingList, list_id)
@@ -474,13 +516,3 @@ def get_shopping_list(list_id: int, session: Session = Depends(get_session)):
         "derived_from": sl.derived_from,
         "created_at": sl.created_at,
     }
-
-@app.delete("/api/snapshots/{snapshot_id}")
-def delete_snapshot(snapshot_id: int, session: Session = Depends(get_session)):
-    snap = session.get(FridgeSnapshot, snapshot_id)
-    if not snap:
-        raise HTTPException(status_code=404, detail="Not Found")
-
-    session.delete(snap)
-    session.commit()
-    return {"ok": True}
