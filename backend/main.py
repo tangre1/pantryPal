@@ -150,6 +150,29 @@ class CreateShoppingList(BaseModel):
     items: Dict[str, Any] = {"items": []}
     derived_from: str = ""
 
+# Generate Recipes Models
+class GenerateRecipesRequest(BaseModel):
+    snapshot_id: int | None = None
+    items: list[dict] | None = None
+    items_text: str | None = None
+
+    count: int = 3
+    servings: int = 2
+    max_time_minutes: int = 30
+    save: bool = False
+
+
+class GeneratedRecipe(BaseModel):
+    title: str
+    tags: list[str] = []
+    ingredients: list[dict] = []
+    steps: list[str] = []
+    missing_items: list[dict] = []
+
+
+class GenerateRecipesResponse(BaseModel):
+    recipes: list[GeneratedRecipe] = []
+# End generate Recipes Models
 
 def _recipe_to_out(r: Recipe) -> RecipeOut:
     return RecipeOut(
@@ -224,6 +247,96 @@ def chat(body: ChatRequest):
                 "Double-check your Azure settings and try again."
             )
         )
+# --------------------------
+# Generate Recipes
+# --------------------------
+@app.post("/api/generate-recipes", response_model=GenerateRecipesResponse)
+def generate_recipes(
+    body: GenerateRecipesRequest,
+    session: Session = Depends(get_session),
+):
+    try:
+        items = []
+
+        # 1️⃣ Get ingredients
+        if body.snapshot_id is not None:
+            snap = session.get(FridgeSnapshot, body.snapshot_id)
+            if not snap:
+                raise HTTPException(status_code=404, detail="Snapshot not found")
+
+            try:
+                data = json.loads(snap.items_json)
+            except json.JSONDecodeError:
+                data = {"items": []}
+
+            items = data.get("items", [])
+
+        elif body.items is not None:
+            items = body.items
+
+        elif body.items_text:
+            parts = [p.strip() for p in body.items_text.split(",") if p.strip()]
+            items = [{"name": p} for p in parts]
+
+        if not items:
+            return {"recipes": []}
+
+        # 2️⃣ Prompt AI (STRICT JSON)
+        system_prompt = """
+Return STRICT JSON only.
+
+Schema:
+{
+  "recipes": [
+    {
+      "title": string,
+      "tags": [string],
+      "ingredients": [
+        {"name": string, "quantity": number|null, "unit": string|null, "notes": string|null}
+      ],
+      "steps": [string],
+      "missing_items": [
+        {"name": string, "category": string, "estimated_quantity": number|null, "unit": string|null, "notes": string|null}
+      ]
+    }
+  ]
+}
+"""
+
+        user_prompt = f"""
+Available ingredients:
+{json.dumps(items, indent=2)}
+
+Generate exactly {body.count} recipes.
+Target {body.servings} servings.
+Max time {body.max_time_minutes} minutes.
+Prefer using what is available.
+"""
+
+        response = client.chat.completions.create(
+            model=AZURE_OPENAI_DEPLOYMENT,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+
+        raw = response.choices[0].message.content or ""
+
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = {"recipes": []}
+
+        return parsed
+
+    except Exception as e:
+        print("generate-recipes error:", e)
+        return {"recipes": []}
+# --------------------------
+# End Generate Recipes
+# --------------------------
+
 
 # --------------------------
 # Vision -> JSON (and save snapshot)
