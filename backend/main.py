@@ -53,7 +53,7 @@ client = AzureOpenAI(
 app = FastAPI(
     title="PantryPal Backend",
     description="Backend API for the PantryPal grocery assistant.",
-    version="0.3.0",
+    version="0.4.0",
 )
 
 # CORS for local React dev
@@ -76,8 +76,14 @@ def on_startup():
 # --------------------------
 # Pydantic models
 # --------------------------
+class ChatMessage(BaseModel):
+    role: str  # "user" | "assistant" | "system"
+    content: str
+
+
 class ChatRequest(BaseModel):
-    message: str
+    # Option 1: frontend sends the entire conversation each time
+    messages: list[ChatMessage]
 
 
 class ChatResponse(BaseModel):
@@ -167,15 +173,22 @@ def health_check():
         "service": "pantryPal backend",
         "azure_endpoint_set": bool(AZURE_OPENAI_ENDPOINT),
         "deployment": AZURE_OPENAI_DEPLOYMENT,
+        "version": "0.4.0",
     }
 
 # --------------------------
-# Chat
+# Chat (Option 1: send history from frontend)
 # --------------------------
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(body: ChatRequest):
-    user_msg = body.message.strip()
-    if not user_msg:
+    # Keep only user/assistant messages to avoid users injecting system prompts
+    history = [
+        {"role": m.role, "content": m.content}
+        for m in body.messages
+        if m.role in ("user", "assistant") and (m.content or "").strip()
+    ]
+
+    if not history:
         return ChatResponse(
             reply=(
                 "Tell me what you're shopping for and I'll help you plan "
@@ -191,16 +204,16 @@ def chat(body: ChatRequest):
                     "role": "system",
                     "content": (
                         "You are PantryPal, a friendly grocery and meal-planning assistant. "
-                        "You help users plan meals, build grocery lists, and optimize for "
-                        "budget and simplicity. Be concise but helpful, and format lists "
+                        "Use the conversation history to remember items, constraints, and lists "
+                        "the user already mentioned. Be concise but helpful, and format lists "
                         "with bullet points when appropriate."
                     ),
                 },
-                {"role": "user", "content": user_msg},
+                *history,
             ],
         )
 
-        reply = response.choices[0].message.content
+        reply = response.choices[0].message.content or ""
         return ChatResponse(reply=reply)
 
     except Exception as e:
@@ -251,7 +264,10 @@ async def image_to_json(
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": "Analyze this image and extract grocery-relevant items."},
+                        {
+                            "type": "text",
+                            "text": "Analyze this image and extract grocery-relevant items.",
+                        },
                         {
                             "type": "image_url",
                             "image_url": {"url": f"data:{mime_type};base64,{b64_image}"},

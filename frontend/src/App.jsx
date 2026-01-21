@@ -287,15 +287,24 @@ function App() {
     const trimmed = (text || "").trim();
     if (!trimmed || loading) return;
 
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", content: trimmed }]);
+    const userMsg = { id: nextId(), role: "user", content: trimmed };
+
+    // Optimistically update UI
+    setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setLoading(true);
+
+    // IMPORTANT: Use the "prev" messages concept by rebuilding from current state + userMsg
+    const historyToSend = [
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+      { role: "user", content: trimmed },
+    ];
 
     try {
       const res = await fetch(`${API_BASE}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({ messages: historyToSend }),
       });
       if (!res.ok) throw new Error("Request failed");
 
