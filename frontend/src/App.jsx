@@ -9,8 +9,84 @@ const PANELS = {
   USER: "user",
 };
 
+// UI helpers (kept outside App so they don't get re-created each render)
+const RailButton = ({ title, active, onClick, children }) => (
+  <button
+    type="button"
+    title={title}
+    onClick={onClick}
+    style={{
+      width: "44px",
+      height: "44px",
+      borderRadius: "12px",
+      border: "1px solid #e5e7eb",
+      background: active ? "#eef2ff" : "#ffffff",
+      cursor: "pointer",
+      display: "grid",
+      placeItems: "center",
+      fontSize: "18px",
+    }}
+  >
+    {children}
+  </button>
+);
+
+const PanelShell = ({ title, onClose, children }) => (
+  <div
+    style={{
+      width: "320px",
+      borderRight: "1px solid #e5e7eb",
+      background: "#ffffff",
+      display: "flex",
+      flexDirection: "column",
+    }}
+  >
+    <div
+      style={{
+        padding: "0.9rem 1rem",
+        borderBottom: "1px solid #e5e7eb",
+        background: "#f9fafb",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        gap: "0.75rem",
+      }}
+    >
+      <div>
+        <div style={{ fontSize: "0.95rem", fontWeight: 800 }}>{title}</div>
+        <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
+          Click the icon again to hide
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        style={{
+          border: "1px solid #e5e7eb",
+          background: "#ffffff",
+          borderRadius: "10px",
+          padding: "0.35rem 0.6rem",
+          cursor: "pointer",
+        }}
+      >
+        ✕
+      </button>
+    </div>
+
+    <div style={{ flex: 1, overflowY: "auto", padding: "1rem" }}>{children}</div>
+  </div>
+);
+
 function App() {
   const [activePanel, setActivePanel] = useState(null);
+
+  // ✅ Stable id generator (fixes focus/typing issues caused by unstable keys)
+  const idRef = useRef(2);
+  const nextId = () => {
+    const id = idRef.current;
+    idRef.current += 1;
+    return id;
+  };
 
   const [messages, setMessages] = useState([
     {
@@ -31,10 +107,18 @@ function App() {
   const [snapshots, setSnapshots] = useState([]);
   const [loadingSnapshots, setLoadingSnapshots] = useState(false);
 
-  // Future panels (placeholders until you add endpoints)
+  // Recipes
   const [recipes, setRecipes] = useState([]);
   const [loadingRecipes, setLoadingRecipes] = useState(false);
 
+  // Create recipe form
+  const [newRecipeTitle, setNewRecipeTitle] = useState("");
+  const [newRecipeTags, setNewRecipeTags] = useState("");
+  const [newRecipeIngredients, setNewRecipeIngredients] = useState("");
+  const [newRecipeSteps, setNewRecipeSteps] = useState("");
+  const [creatingRecipe, setCreatingRecipe] = useState(false);
+
+  // User
   const [user, setUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(false);
 
@@ -83,7 +167,7 @@ function App() {
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now(),
+          id: nextId(),
           role: "assistant",
           content: "⚠️ I couldn't delete that snapshot. Try again.",
         },
@@ -92,31 +176,84 @@ function App() {
   };
 
   // -----------------------------
-  // API: recipes (placeholder)
+  // API: recipes
   // -----------------------------
   const fetchRecipes = async () => {
-    // Only useful once you add backend endpoints like GET /api/recipes
     setLoadingRecipes(true);
     try {
       const res = await fetch(`${API_BASE}/api/recipes`);
-      if (!res.ok) throw new Error("No recipes endpoint yet");
+      if (!res.ok) throw new Error("Failed to fetch recipes");
       const data = await res.json();
       setRecipes(Array.isArray(data) ? data : []);
     } catch (err) {
-      // Normal for now if you haven’t implemented recipes endpoints
-      console.warn("Recipes not available yet:", err?.message || err);
+      console.error("Recipes fetch failed:", err);
       setRecipes([]);
     } finally {
       setLoadingRecipes(false);
     }
   };
 
+  const createRecipe = async () => {
+    const title = newRecipeTitle.trim();
+    if (!title) {
+      alert("Recipe title is required.");
+      return;
+    }
+
+    // tags: "dinner, easy" -> ["dinner","easy"]
+    const tags = newRecipeTags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    // ingredients: one per line -> [{name: "..."}]
+    const ingredients = newRecipeIngredients
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((name) => ({ name }));
+
+    // steps: one per line -> ["step 1", "step 2"]
+    const steps = newRecipeSteps
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    setCreatingRecipe(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/recipes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: null,
+          title,
+          tags,
+          ingredients,
+          steps,
+          source: "manual",
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to create recipe");
+
+      setNewRecipeTitle("");
+      setNewRecipeTags("");
+      setNewRecipeIngredients("");
+      setNewRecipeSteps("");
+
+      await fetchRecipes();
+    } catch (err) {
+      console.error(err);
+      alert("Could not create recipe. Check backend logs.");
+    } finally {
+      setCreatingRecipe(false);
+    }
+  };
+
   // -----------------------------
-  // API: user (placeholder)
+  // API: user (demo)
   // -----------------------------
   const fetchUser = async () => {
-    // Only useful once you have a real login or a default user id.
-    // For demo, you can hardcode user 1 if you created it: /api/users/1
     setLoadingUser(true);
     try {
       const res = await fetch(`${API_BASE}/api/users/1`);
@@ -131,7 +268,7 @@ function App() {
     }
   };
 
-  // Load snapshots on mount (your most useful panel today)
+  // Load snapshots on mount
   useEffect(() => {
     fetchSnapshots();
   }, []);
@@ -150,10 +287,7 @@ function App() {
     const trimmed = (text || "").trim();
     if (!trimmed || loading) return;
 
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now(), role: "user", content: trimmed },
-    ]);
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", content: trimmed }]);
     setInput("");
     setLoading(true);
 
@@ -168,14 +302,14 @@ function App() {
       const data = await res.json();
       setMessages((prev) => [
         ...prev,
-        { id: Date.now() + 1, role: "assistant", content: data.reply },
+        { id: nextId(), role: "assistant", content: data.reply },
       ]);
     } catch (err) {
       console.error(err);
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now() + 2,
+          id: nextId(),
           role: "assistant",
           content:
             "😬 I had trouble reaching the PantryPal server. Make sure the backend is running on http://localhost:8000.",
@@ -218,7 +352,7 @@ function App() {
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now(),
+          id: nextId(),
           role: "assistant",
           content:
             "I analyzed the image and extracted these items:\n" +
@@ -232,7 +366,7 @@ function App() {
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now() + 1,
+          id: nextId(),
           role: "assistant",
           content:
             "⚠️ I couldn't process that image. Please try again with a clearer photo.",
@@ -271,76 +405,6 @@ Keep it concise and practical.
 
     await sendTextToChat(prompt);
   };
-
-  // -----------------------------
-  // UI pieces
-  // -----------------------------
-  const RailButton = ({ title, active, onClick, children }) => (
-    <button
-      title={title}
-      onClick={onClick}
-      style={{
-        width: "44px",
-        height: "44px",
-        borderRadius: "12px",
-        border: "1px solid #e5e7eb",
-        background: active ? "#eef2ff" : "#ffffff",
-        cursor: "pointer",
-        display: "grid",
-        placeItems: "center",
-        fontSize: "18px",
-      }}
-    >
-      {children}
-    </button>
-  );
-
-  const PanelShell = ({ title, children }) => (
-    <div
-      style={{
-        width: "320px",
-        borderRight: "1px solid #e5e7eb",
-        background: "#ffffff",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <div
-        style={{
-          padding: "0.9rem 1rem",
-          borderBottom: "1px solid #e5e7eb",
-          background: "#f9fafb",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: "0.75rem",
-        }}
-      >
-        <div>
-          <div style={{ fontSize: "0.95rem", fontWeight: 800 }}>{title}</div>
-          <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-            Click the icon again to hide
-          </div>
-        </div>
-        <button
-          onClick={() => setActivePanel(null)}
-          style={{
-            border: "1px solid #e5e7eb",
-            background: "#ffffff",
-            borderRadius: "10px",
-            padding: "0.35rem 0.6rem",
-            cursor: "pointer",
-          }}
-        >
-          ✕
-        </button>
-      </div>
-
-      <div style={{ flex: 1, overflowY: "auto", padding: "1rem" }}>
-        {children}
-      </div>
-    </div>
-  );
 
   return (
     <div
@@ -402,8 +466,9 @@ Keep it concise and practical.
 
       {/* Expandable panel */}
       {activePanel === PANELS.HISTORY && (
-        <PanelShell title="Scan History">
+        <PanelShell title="Scan History" onClose={() => setActivePanel(null)}>
           <button
+            type="button"
             onClick={fetchSnapshots}
             style={{
               width: "100%",
@@ -420,9 +485,7 @@ Keep it concise and practical.
           </button>
 
           {loadingSnapshots && (
-            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-              Loading scans…
-            </div>
+            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>Loading scans…</div>
           )}
 
           {!loadingSnapshots && snapshots.length === 0 && (
@@ -466,6 +529,7 @@ Keep it concise and practical.
               </div>
 
               <button
+                type="button"
                 onClick={() => handleUseSnapshot(snap)}
                 style={{
                   marginTop: "0.6rem",
@@ -483,6 +547,7 @@ Keep it concise and practical.
               </button>
 
               <button
+                type="button"
                 onClick={() => deleteSnapshot(snap.id)}
                 style={{
                   marginTop: "0.45rem",
@@ -504,23 +569,124 @@ Keep it concise and practical.
       )}
 
       {activePanel === PANELS.RECIPES && (
-        <PanelShell title="Recipes">
-          <div style={{ fontSize: "0.85rem", color: "#6b7280", marginBottom: "0.75rem" }}>
-            This panel is wired up, but you’ll need backend endpoints like:
-            <div style={{ marginTop: "0.25rem", fontFamily: "monospace", fontSize: "0.8rem" }}>
-              GET /api/recipes
-            </div>
+        <PanelShell title="Recipes" onClose={() => setActivePanel(null)}>
+          <button
+            type="button"
+            onClick={fetchRecipes}
+            style={{
+              width: "100%",
+              borderRadius: "10px",
+              border: "1px solid #d1d5db",
+              padding: "0.55rem 0.7rem",
+              background: "#ffffff",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+              marginBottom: "0.75rem",
+            }}
+          >
+            Refresh
+          </button>
+
+          {/* Create Recipe */}
+          <div
+            style={{
+              border: "1px solid #e5e7eb",
+              borderRadius: "12px",
+              padding: "0.75rem",
+              background: "#ffffff",
+              marginBottom: "0.75rem",
+            }}
+          >
+            <div style={{ fontWeight: 800, marginBottom: "0.5rem" }}>Create a recipe</div>
+
+            <input
+              value={newRecipeTitle}
+              onChange={(e) => setNewRecipeTitle(e.target.value)}
+              placeholder="Title (required)"
+              style={{
+                width: "100%",
+                padding: "0.55rem 0.7rem",
+                borderRadius: "10px",
+                border: "1px solid #d1d5db",
+                marginBottom: "0.5rem",
+                fontSize: "0.85rem",
+              }}
+            />
+
+            <input
+              value={newRecipeTags}
+              onChange={(e) => setNewRecipeTags(e.target.value)}
+              placeholder="Tags (comma separated) e.g. dinner, easy"
+              style={{
+                width: "100%",
+                padding: "0.55rem 0.7rem",
+                borderRadius: "10px",
+                border: "1px solid #d1d5db",
+                marginBottom: "0.5rem",
+                fontSize: "0.85rem",
+              }}
+            />
+
+            <textarea
+              value={newRecipeIngredients}
+              onChange={(e) => setNewRecipeIngredients(e.target.value)}
+              placeholder={"Ingredients (one per line)\nExample:\nChicken\nRice\nBroccoli"}
+              rows={4}
+              style={{
+                width: "100%",
+                padding: "0.55rem 0.7rem",
+                borderRadius: "10px",
+                border: "1px solid #d1d5db",
+                marginBottom: "0.5rem",
+                fontSize: "0.85rem",
+                resize: "vertical",
+              }}
+            />
+
+            <textarea
+              value={newRecipeSteps}
+              onChange={(e) => setNewRecipeSteps(e.target.value)}
+              placeholder={"Steps (one per line)\nExample:\nCook chicken\nCook rice\nServe together"}
+              rows={4}
+              style={{
+                width: "100%",
+                padding: "0.55rem 0.7rem",
+                borderRadius: "10px",
+                border: "1px solid #d1d5db",
+                marginBottom: "0.6rem",
+                fontSize: "0.85rem",
+                resize: "vertical",
+              }}
+            />
+
+            <button
+              type="button"
+              onClick={createRecipe}
+              disabled={creatingRecipe}
+              style={{
+                width: "100%",
+                borderRadius: "999px",
+                border: "none",
+                padding: "0.55rem 0.8rem",
+                background: creatingRecipe ? "#9ca3af" : "#2563eb",
+                color: "#ffffff",
+                cursor: creatingRecipe ? "default" : "pointer",
+                fontSize: "0.85rem",
+                opacity: creatingRecipe ? 0.8 : 1,
+              }}
+            >
+              {creatingRecipe ? "Saving…" : "Save recipe"}
+            </button>
           </div>
 
+          {/* Recipes list */}
           {loadingRecipes && (
-            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-              Loading recipes…
-            </div>
+            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>Loading recipes…</div>
           )}
 
           {!loadingRecipes && recipes.length === 0 && (
             <div style={{ fontSize: "0.85rem", color: "#9ca3af" }}>
-              No recipes yet. Next step: add save + list recipe endpoints.
+              No recipes yet. Create one above.
             </div>
           )}
 
@@ -532,11 +698,16 @@ Keep it concise and practical.
                 borderRadius: "12px",
                 padding: "0.75rem",
                 marginBottom: "0.75rem",
+                background: "#ffffff",
               }}
             >
               <div style={{ fontWeight: 800 }}>{r.title}</div>
-              <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-                {r.tags || ""}
+              <div style={{ fontSize: "0.8rem", color: "#6b7280", marginTop: "0.25rem" }}>
+                {Array.isArray(r.tags) ? r.tags.join(", ") : ""}
+              </div>
+              <div style={{ fontSize: "0.75rem", color: "#6b7280", marginTop: "0.35rem" }}>
+                Ingredients: {Array.isArray(r.ingredients) ? r.ingredients.length : 0} • Steps:{" "}
+                {Array.isArray(r.steps) ? r.steps.length : 0}
               </div>
             </div>
           ))}
@@ -544,7 +715,7 @@ Keep it concise and practical.
       )}
 
       {activePanel === PANELS.USER && (
-        <PanelShell title="User Profile">
+        <PanelShell title="User Profile" onClose={() => setActivePanel(null)}>
           <div style={{ fontSize: "0.85rem", color: "#6b7280", marginBottom: "0.75rem" }}>
             For demo purposes this tries to load user id <b>1</b>:
             <div style={{ marginTop: "0.25rem", fontFamily: "monospace", fontSize: "0.8rem" }}>
@@ -553,9 +724,7 @@ Keep it concise and practical.
           </div>
 
           {loadingUser && (
-            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>
-              Loading user…
-            </div>
+            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>Loading user…</div>
           )}
 
           {!loadingUser && !user && (
@@ -617,9 +786,7 @@ Keep it concise and practical.
           }}
         >
           <div>
-            <h1 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800 }}>
-              PantryPal
-            </h1>
+            <h1 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800 }}>PantryPal</h1>
             <p style={{ margin: 0, fontSize: "0.8rem", color: "#6b7280" }}>
               Grocery & meal planning assistant
             </p>
