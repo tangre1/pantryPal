@@ -5,14 +5,12 @@ import "./App.css";
 
 const API_BASE = "http://localhost:8000";
 
-// Which left panel is open (null = closed)
 const PANELS = {
   HISTORY: "history",
   RECIPES: "recipes",
   USER: "user",
 };
 
-// UI helpers (kept outside App so they don't get re-created each render)
 const RailButton = ({ title, active, onClick, onMouseEnter, children }) => (
   <button
     type="button"
@@ -25,15 +23,15 @@ const RailButton = ({ title, active, onClick, onMouseEnter, children }) => (
   </button>
 );
 
-const PanelShell = ({ title, onClose, children }) => (
+const PanelShell = ({ title, subtitle, onClose, children }) => (
   <div className="pp-panel">
     <div className="pp-panelHeader">
       <div>
         <div className="pp-panelTitle">{title}</div>
-        <div className="pp-panelSubtitle">Hover away to hide</div>
+        <div className="pp-panelSubtitle">{subtitle}</div>
       </div>
 
-      <button type="button" onClick={onClose} className="pp-panelClose">
+      <button type="button" onClick={onClose} className="pp-panelClose" aria-label="Close">
         ✕
       </button>
     </div>
@@ -45,13 +43,9 @@ const PanelShell = ({ title, onClose, children }) => (
 function App() {
   const [activePanel, setActivePanel] = useState(null);
 
-  // ✅ Stable id generator (fixes focus/typing issues caused by unstable keys)
+  // Stable ids
   const idRef = useRef(2);
-  const nextId = () => {
-    const id = idRef.current;
-    idRef.current += 1;
-    return id;
-  };
+  const nextId = () => idRef.current++;
 
   const [messages, setMessages] = useState([
     {
@@ -61,53 +55,49 @@ function App() {
         "Hi, I’m PantryPal 🥕\nTell me what you’re shopping for and I’ll help with lists and meal ideas.",
     },
   ]);
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Image → JSON
   const [imageResult, setImageResult] = useState(null);
   const [uploading, setUploading] = useState(false);
 
-  // Snapshot history
   const [snapshots, setSnapshots] = useState([]);
   const [loadingSnapshots, setLoadingSnapshots] = useState(false);
 
-  // Recipes
   const [recipes, setRecipes] = useState([]);
   const [loadingRecipes, setLoadingRecipes] = useState(false);
 
-  // Create recipe form
   const [newRecipeTitle, setNewRecipeTitle] = useState("");
   const [newRecipeTags, setNewRecipeTags] = useState("");
   const [newRecipeIngredients, setNewRecipeIngredients] = useState("");
   const [newRecipeSteps, setNewRecipeSteps] = useState("");
   const [creatingRecipe, setCreatingRecipe] = useState(false);
 
-  // User
   const [user, setUser] = useState(null);
   const [loadingUser, setLoadingUser] = useState(false);
 
   const messagesEndRef = useRef(null);
-
-  // Optional: autofocus the input on load
   const inputRef = useRef(null);
+
+  // Hover-open behavior
+  const hoverCloseTimer = useRef(null);
+  const requestOpenPanel = (name) => {
+    if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
+    setActivePanel(name);
+  };
+  const requestClosePanelSoon = () => {
+    if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
+    hoverCloseTimer.current = setTimeout(() => setActivePanel(null), 140);
+  };
+
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  // Scroll chat to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  // Toggle sidebar panels (click behavior)
-  const togglePanel = (panelName) => {
-    setActivePanel((prev) => (prev === panelName ? null : panelName));
-  };
-
-  // Hover behavior for left rail + panel
-  const openPanel = (panelName) => setActivePanel(panelName);
-  const closePanel = () => setActivePanel(null);
 
   // -----------------------------
   // API: snapshots
@@ -141,11 +131,7 @@ function App() {
       console.error(err);
       setMessages((prev) => [
         ...prev,
-        {
-          id: nextId(),
-          role: "assistant",
-          content: "⚠️ I couldn't delete that snapshot. Try again.",
-        },
+        { id: nextId(), role: "assistant", content: "⚠️ I couldn't delete that snapshot. Try again." },
       ]);
     }
   };
@@ -170,15 +156,9 @@ function App() {
 
   const createRecipe = async () => {
     const title = newRecipeTitle.trim();
-    if (!title) {
-      alert("Recipe title is required.");
-      return;
-    }
+    if (!title) return alert("Recipe title is required.");
 
-    const tags = newRecipeTags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
+    const tags = newRecipeTags.split(",").map((t) => t.trim()).filter(Boolean);
 
     const ingredients = newRecipeIngredients
       .split("\n")
@@ -186,24 +166,14 @@ function App() {
       .filter(Boolean)
       .map((name) => ({ name }));
 
-    const steps = newRecipeSteps
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
+    const steps = newRecipeSteps.split("\n").map((line) => line.trim()).filter(Boolean);
 
     setCreatingRecipe(true);
     try {
       const res = await fetch(`${API_BASE}/api/recipes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: null,
-          title,
-          tags,
-          ingredients,
-          steps,
-          source: "manual",
-        }),
+        body: JSON.stringify({ user_id: null, title, tags, ingredients, steps, source: "manual" }),
       });
 
       if (!res.ok) throw new Error("Failed to create recipe");
@@ -212,7 +182,6 @@ function App() {
       setNewRecipeTags("");
       setNewRecipeIngredients("");
       setNewRecipeSteps("");
-
       await fetchRecipes();
     } catch (err) {
       console.error(err);
@@ -240,12 +209,10 @@ function App() {
     }
   };
 
-  // Load snapshots on mount
   useEffect(() => {
     fetchSnapshots();
   }, []);
 
-  // When a panel opens, lazily load its data
   useEffect(() => {
     if (activePanel === PANELS.HISTORY) fetchSnapshots();
     if (activePanel === PANELS.RECIPES) fetchRecipes();
@@ -259,9 +226,7 @@ function App() {
     const trimmed = (text || "").trim();
     if (!trimmed || loading) return;
 
-    const userMsg = { id: nextId(), role: "user", content: trimmed };
-
-    setMessages((prev) => [...prev, userMsg]);
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", content: trimmed }]);
     setInput("");
     setLoading(true);
 
@@ -277,12 +242,9 @@ function App() {
         body: JSON.stringify({ messages: historyToSend }),
       });
       if (!res.ok) throw new Error("Request failed");
-
       const data = await res.json();
-      setMessages((prev) => [
-        ...prev,
-        { id: nextId(), role: "assistant", content: data.reply },
-      ]);
+
+      setMessages((prev) => [...prev, { id: nextId(), role: "assistant", content: data.reply }]);
     } catch (err) {
       console.error(err);
       setMessages((prev) => [
@@ -322,7 +284,6 @@ function App() {
         method: "POST",
         body: formData,
       });
-
       if (!res.ok) throw new Error("Image upload failed");
 
       const data = await res.json();
@@ -333,9 +294,7 @@ function App() {
         {
           id: nextId(),
           role: "assistant",
-          content:
-            "I analyzed the image and extracted these items:\n" +
-            JSON.stringify(data.data, null, 2),
+          content: "I analyzed the image and extracted these items:\n" + JSON.stringify(data.data, null, 2),
         },
       ]);
 
@@ -344,12 +303,7 @@ function App() {
       console.error(err);
       setMessages((prev) => [
         ...prev,
-        {
-          id: nextId(),
-          role: "assistant",
-          content:
-            "⚠️ I couldn't process that image. Please try again with a clearer photo.",
-        },
+        { id: nextId(), role: "assistant", content: "⚠️ I couldn't process that image. Please try again." },
       ]);
     } finally {
       setUploading(false);
@@ -359,8 +313,7 @@ function App() {
 
   const formatDateTime = (isoString) => {
     try {
-      const d = new Date(isoString);
-      return d.toLocaleString();
+      return new Date(isoString).toLocaleString();
     } catch {
       return isoString;
     }
@@ -394,32 +347,10 @@ Keep it concise and practical.
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   const fallbackSuggestions = [
-    {
-      emoji: "🍳",
-      label: "Cook with pantry",
-      prompt: "Use what I have at home to suggest 3 dinners, and tell me what's missing.",
-    },
-    {
-      emoji: "🧩",
-      label: "Fill the gaps",
-      prompt:
-        "I have some ingredients. Ask me 5 quick questions to fill in the gaps and then plan 3 dinners.",
-    },
-    {
-      emoji: "🥗",
-      label: "High-protein meals",
-      prompt: "Suggest 3 high-protein dinners and give me a grocery list.",
-    },
-    {
-      emoji: "💸",
-      label: "Budget meal plan",
-      prompt: "Plan 3 budget-friendly dinners and list what I need to buy.",
-    },
-    {
-      emoji: "🌮",
-      label: "Taco night",
-      prompt: "Make a grocery list for taco night for 4 people.",
-    },
+    { emoji: "🍳", label: "Use What I Have", prompt: "Use what I have at home to suggest 3 dinners, and tell me what's missing." },
+    { emoji: "🥗", label: "Fresh Meal Plan", prompt: "Plan 3 easy dinners for this week and give me one combined grocery list." },
+    { emoji: "💪", label: "High-Protein Ideas", prompt: "Suggest 3 high-protein dinners and give me a grocery list." },
+    { emoji: "🛒", label: "Smart Grocery List", prompt: "Ask me 5 quick questions, then build a grocery list grouped by category." },
   ];
 
   const fetchSuggestions = async () => {
@@ -443,22 +374,27 @@ Keep it concise and practical.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEmpty]);
 
-  // ✅ Limit to 4 buttons on the landing screen
   const visibleSuggestions = (suggestions.length ? suggestions : fallbackSuggestions).slice(0, 4);
 
   return (
     <div className="pp-shell">
-      {/* Left side hover zone (rail + panel) */}
-      <div className="pp-leftZone" onMouseLeave={closePanel}>
-        {/* Left rail (icons) */}
+      {/* LEFT SIDE: rail + panel as one full-height column */}
+      <div
+        className="pp-left"
+        onMouseEnter={() => {
+          if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
+        }}
+        onMouseLeave={requestClosePanelSoon}
+      >
+        {/* Left rail */}
         <div className="pp-rail">
           <div className="pp-railBrand">🥕</div>
 
           <RailButton
             title="Scan history"
             active={activePanel === PANELS.HISTORY}
-            onClick={() => togglePanel(PANELS.HISTORY)}
-            onMouseEnter={() => openPanel(PANELS.HISTORY)}
+            onClick={() => setActivePanel((p) => (p === PANELS.HISTORY ? null : PANELS.HISTORY))}
+            onMouseEnter={() => requestOpenPanel(PANELS.HISTORY)}
           >
             🕒
           </RailButton>
@@ -466,8 +402,8 @@ Keep it concise and practical.
           <RailButton
             title="Recipes"
             active={activePanel === PANELS.RECIPES}
-            onClick={() => togglePanel(PANELS.RECIPES)}
-            onMouseEnter={() => openPanel(PANELS.RECIPES)}
+            onClick={() => setActivePanel((p) => (p === PANELS.RECIPES ? null : PANELS.RECIPES))}
+            onMouseEnter={() => requestOpenPanel(PANELS.RECIPES)}
           >
             📖
           </RailButton>
@@ -475,22 +411,26 @@ Keep it concise and practical.
           <RailButton
             title="User profile"
             active={activePanel === PANELS.USER}
-            onClick={() => togglePanel(PANELS.USER)}
-            onMouseEnter={() => openPanel(PANELS.USER)}
+            onClick={() => setActivePanel((p) => (p === PANELS.USER ? null : PANELS.USER))}
+            onMouseEnter={() => requestOpenPanel(PANELS.USER)}
           >
             👤
           </RailButton>
 
           <div style={{ flex: 1 }} />
 
-          <RailButton title="Close panel" active={false} onClick={closePanel}>
+          <RailButton title="Close panel" active={false} onClick={() => setActivePanel(null)}>
             ⬅️
           </RailButton>
         </div>
 
-        {/* Expandable panel */}
+        {/* Expandable panel (fills the rest of the left column) */}
         {activePanel === PANELS.HISTORY && (
-          <PanelShell title="Scan History" onClose={closePanel}>
+          <PanelShell
+            title="Scan History"
+            subtitle="Hover away to hide"
+            onClose={() => setActivePanel(null)}
+          >
             <button type="button" onClick={fetchSnapshots} className="pp-btn">
               Refresh
             </button>
@@ -506,16 +446,11 @@ Keep it concise and practical.
                 <div className="pp-cardTitle" title={snap.label}>
                   {snap.label || `Snapshot #${snap.id}`}
                 </div>
-
                 <div className="pp-muted">{formatDateTime(snap.created_at)}</div>
                 <div className="pp-muted">Items: {snap?.data?.items?.length ?? 0}</div>
 
                 <div style={{ marginTop: 10 }}>
-                  <button
-                    type="button"
-                    onClick={() => handleUseSnapshot(snap)}
-                    className="pp-btn pp-btnPrimary"
-                  >
+                  <button type="button" onClick={() => handleUseSnapshot(snap)} className="pp-btn pp-btnPrimary">
                     Use this scan
                   </button>
 
@@ -531,12 +466,11 @@ Keep it concise and practical.
         )}
 
         {activePanel === PANELS.RECIPES && (
-          <PanelShell title="Recipes" onClose={closePanel}>
+          <PanelShell title="Recipes" subtitle="Hover away to hide" onClose={() => setActivePanel(null)}>
             <button type="button" onClick={fetchRecipes} className="pp-btn">
               Refresh
             </button>
 
-            {/* Create Recipe */}
             <div className="pp-card" style={{ marginTop: 12 }}>
               <div className="pp-cardTitle" style={{ marginBottom: 10 }}>
                 Create a recipe
@@ -595,12 +529,8 @@ Keep it concise and practical.
               </button>
             </div>
 
-            {/* Recipes list */}
             {loadingRecipes && <div className="pp-muted">Loading recipes…</div>}
-
-            {!loadingRecipes && recipes.length === 0 && (
-              <div className="pp-muted">No recipes yet. Create one above.</div>
-            )}
+            {!loadingRecipes && recipes.length === 0 && <div className="pp-muted">No recipes yet. Create one above.</div>}
 
             {recipes.map((r) => (
               <div key={r.id} className="pp-card">
@@ -616,27 +546,23 @@ Keep it concise and practical.
         )}
 
         {activePanel === PANELS.USER && (
-          <PanelShell title="User Profile" onClose={closePanel}>
+          <PanelShell title="User Profile" subtitle="Hover away to hide" onClose={() => setActivePanel(null)}>
             <div className="pp-muted" style={{ marginBottom: 12 }}>
               For demo purposes this tries to load user id <b>1</b>:
-              <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 12 }}>
-                GET /api/users/1
-              </div>
+              <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 12 }}>GET /api/users/1</div>
             </div>
 
             {loadingUser && <div className="pp-muted">Loading user…</div>}
 
             {!loadingUser && !user && (
               <div className="pp-muted">
-                No user loaded yet. Create one via POST /api/users, or change the fetchUser()
-                function to the correct user id.
+                No user loaded yet. Create one via POST /api/users, or change the fetchUser() function.
               </div>
             )}
 
             {user && (
               <div className="pp-card">
                 <div style={{ fontWeight: 900, fontSize: 16 }}>{user.name}</div>
-
                 <div className="pp-muted" style={{ marginTop: 8, color: "var(--text)" }}>
                   Budget: <b>{user.budget_style}</b>
                 </div>
@@ -669,7 +595,6 @@ Keep it concise and practical.
 
       {/* Main chat panel */}
       <div className="pp-main">
-        {/* Top header */}
         <header className="pp-topbar">
           <div className="pp-topbarInner">
             <div>
@@ -682,21 +607,14 @@ Keep it concise and practical.
 
               <label className={`pp-upload ${uploading ? "pp-uploadDisabled" : ""}`}>
                 {uploading ? "Analyzing..." : "Upload image"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  style={{ display: "none" }}
-                />
+                <input type="file" accept="image/*" onChange={handleImageChange} style={{ display: "none" }} />
               </label>
             </div>
           </div>
         </header>
 
-        {/* Messages */}
         <div className="pp-chatWrap">
           <div className="pp-chatColumn">
-            {/* Landing stack */}
             {isEmpty && (
               <div className="pp-landing">
                 <div className="pp-empty">
@@ -711,7 +629,7 @@ Keep it concise and practical.
                   </div>
 
                   <div className="pp-chipRow">
-                    {loadingSuggestions && suggestions.length === 0 ? (
+                    {loadingSuggestions && visibleSuggestions.length === 0 ? (
                       <div className="pp-muted" style={{ marginTop: 8 }}>
                         Generating suggestions…
                       </div>
@@ -730,9 +648,7 @@ Keep it concise and practical.
                     )}
                   </div>
 
-                  <div className="pp-chipHint">
-                    Tip: you can also upload a pantry photo to generate meals automatically.
-                  </div>
+                  <div className="pp-chipHint">Tip: you can also upload a pantry photo to generate meals automatically.</div>
                 </div>
 
                 <div className="pp-intro">
@@ -747,16 +663,10 @@ Keep it concise and practical.
               </div>
             )}
 
-            {/* Normal messages */}
             {!isEmpty &&
               messages.map((m) => (
-                <div
-                  key={m.id}
-                  className={`pp-row ${m.role === "user" ? "pp-rowUser" : "pp-rowBot"}`}
-                >
-                  <div
-                    className={`pp-bubble ${m.role === "user" ? "pp-bubbleUser" : "pp-bubbleBot"}`}
-                  >
+                <div key={m.id} className={`pp-row ${m.role === "user" ? "pp-rowUser" : "pp-rowBot"}`}>
+                  <div className={`pp-bubble ${m.role === "user" ? "pp-bubbleUser" : "pp-bubbleBot"}`}>
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                   </div>
                 </div>
@@ -784,7 +694,6 @@ Keep it concise and practical.
           </div>
         </div>
 
-        {/* Input */}
         <form onSubmit={sendMessage} className="pp-composer">
           <div className="pp-composerInner">
             <input
