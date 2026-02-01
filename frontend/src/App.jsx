@@ -86,6 +86,12 @@ function App() {
 
   const messagesEndRef = useRef(null);
 
+  // Optional: autofocus the input on load
+  const inputRef = useRef(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
   // Scroll chat to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -162,20 +168,17 @@ function App() {
       return;
     }
 
-    // tags: "dinner, easy" -> ["dinner","easy"]
     const tags = newRecipeTags
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean);
 
-    // ingredients: one per line -> [{name: "..."}]
     const ingredients = newRecipeIngredients
       .split("\n")
       .map((line) => line.trim())
       .filter(Boolean)
       .map((name) => ({ name }));
 
-    // steps: one per line -> ["step 1", "step 2"]
     const steps = newRecipeSteps
       .split("\n")
       .map((line) => line.trim())
@@ -251,12 +254,10 @@ function App() {
 
     const userMsg = { id: nextId(), role: "user", content: trimmed };
 
-    // Optimistically update UI
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setLoading(true);
 
-    // IMPORTANT: Use the "prev" messages concept by rebuilding from current state + userMsg
     const historyToSend = [
       ...messages.map((m) => ({ role: m.role, content: m.content })),
       { role: "user", content: trimmed },
@@ -317,7 +318,7 @@ function App() {
 
       if (!res.ok) throw new Error("Image upload failed");
 
-      const data = await res.json(); // { data: {...}, snapshot_id: number }
+      const data = await res.json();
       setImageResult(data.data);
 
       setMessages((prev) => [
@@ -376,6 +377,67 @@ Keep it concise and practical.
 
     await sendTextToChat(prompt);
   };
+
+  const isEmpty = messages.length <= 1;
+
+  // -----------------------------
+  // AI landing suggestions
+  // -----------------------------
+  const [suggestions, setSuggestions] = useState([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
+  const fallbackSuggestions = [
+    {
+      emoji: "🍳",
+      label: "Cook with pantry",
+      prompt: "Use what I have at home to suggest 3 dinners, and tell me what's missing.",
+    },
+    {
+      emoji: "🧩",
+      label: "Fill the gaps",
+      prompt:
+        "I have some ingredients. Ask me 5 quick questions to fill in the gaps and then plan 3 dinners.",
+    },
+    {
+      emoji: "🥗",
+      label: "High-protein meals",
+      prompt: "Suggest 3 high-protein dinners and give me a grocery list.",
+    },
+    {
+      emoji: "💸",
+      label: "Budget meal plan",
+      prompt: "Plan 3 budget-friendly dinners and list what I need to buy.",
+    },
+    {
+      emoji: "🌮",
+      label: "Taco night",
+      prompt: "Make a grocery list for taco night for 4 people.",
+    },
+  ];
+
+  const fetchSuggestions = async () => {
+    setLoadingSuggestions(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/suggestions`);
+      if (!res.ok) throw new Error("Failed to fetch suggestions");
+      const data = await res.json();
+      const list = Array.isArray(data?.suggestions) ? data.suggestions : [];
+      setSuggestions(list.length ? list : fallbackSuggestions);
+    } catch (e) {
+      console.warn("suggestions failed:", e);
+      setSuggestions(fallbackSuggestions);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isEmpty) fetchSuggestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEmpty]);
+
+  // ✅ Limit to 4 buttons on the landing screen
+  const visibleSuggestions = (suggestions.length ? suggestions : fallbackSuggestions).slice(0, 4);
 
   return (
     <div className="pp-shell">
@@ -531,9 +593,7 @@ Keep it concise and practical.
           {recipes.map((r) => (
             <div key={r.id} className="pp-card">
               <div className="pp-cardTitle">{r.title}</div>
-              <div className="pp-muted">
-                {Array.isArray(r.tags) ? r.tags.join(", ") : ""}
-              </div>
+              <div className="pp-muted">{Array.isArray(r.tags) ? r.tags.join(", ") : ""}</div>
               <div className="pp-muted">
                 Ingredients: {Array.isArray(r.ingredients) ? r.ingredients.length : 0} • Steps:{" "}
                 {Array.isArray(r.steps) ? r.steps.length : 0}
@@ -598,43 +658,98 @@ Keep it concise and practical.
       <div className="pp-main">
         {/* Top header */}
         <header className="pp-topbar">
-          <div>
-            <h1 className="pp-title">PantryPal</h1>
-            <p className="pp-subtitle">Grocery & meal planning assistant</p>
-          </div>
+          <div className="pp-topbarInner">
+            <div>
+              <h1 className="pp-title">PantryPal</h1>
+              <p className="pp-subtitle">Grocery & meal planning assistant</p>
+            </div>
 
-          <div className="pp-actions">
-            <span className="pp-pill">beta</span>
+            <div className="pp-actions">
+              <span className="pp-pill">beta</span>
 
-            <label className={`pp-upload ${uploading ? "pp-uploadDisabled" : ""}`}>
-              {uploading ? "Analyzing..." : "Upload image"}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-                style={{ display: "none" }}
-              />
-            </label>
+              <label className={`pp-upload ${uploading ? "pp-uploadDisabled" : ""}`}>
+                {uploading ? "Analyzing..." : "Upload image"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  style={{ display: "none" }}
+                />
+              </label>
+            </div>
           </div>
         </header>
 
         {/* Messages */}
         <div className="pp-chatWrap">
           <div className="pp-chatColumn">
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={`pp-row ${m.role === "user" ? "pp-rowUser" : "pp-rowBot"}`}
-              >
-                <div
-                  className={`pp-bubble ${
-                    m.role === "user" ? "pp-bubbleUser" : "pp-bubbleBot"
-                  }`}
-                >
-                  {m.content}
+            {/* Landing stack */}
+            {isEmpty && (
+              <div className="pp-landing">
+                <div className="pp-empty">
+                  <div className="pp-emptyTop">
+                    <div className="pp-emptyIcon">🥕</div>
+                    <div>
+                      <p className="pp-emptyTitle">What are we shopping for?</p>
+                      <p className="pp-emptySub">
+                        Start with a goal — dinner ideas, a grocery list, or “use what I have.”
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="pp-chipRow">
+                    {loadingSuggestions && suggestions.length === 0 ? (
+                      <div className="pp-muted" style={{ marginTop: 8 }}>
+                        Generating suggestions…
+                      </div>
+                    ) : (
+                      visibleSuggestions.map((s, idx) => (
+                        <button
+                          key={`${s.label}-${idx}`}
+                          type="button"
+                          className="pp-chip"
+                          onClick={() => sendTextToChat(s.prompt)}
+                        >
+                          {s.emoji ? `${s.emoji} ` : ""}
+                          {s.label}
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="pp-chipHint">
+                    Tip: you can also upload a pantry photo to generate meals automatically.
+                  </div>
+                </div>
+
+                <div className="pp-intro">
+                  <div className="pp-introTop">
+                    <div className="pp-introAvatar">🥕</div>
+                    <div className="pp-introName">PantryPal</div>
+                  </div>
+                  <p className="pp-introText">
+                    Tell me what you’re shopping for and I’ll help with lists and meal ideas.
+                  </p>
                 </div>
               </div>
-            ))}
+            )}
+
+            {/* Normal messages */}
+            {!isEmpty &&
+              messages.map((m) => (
+                <div
+                  key={m.id}
+                  className={`pp-row ${m.role === "user" ? "pp-rowUser" : "pp-rowBot"}`}
+                >
+                  <div
+                    className={`pp-bubble ${
+                      m.role === "user" ? "pp-bubbleUser" : "pp-bubbleBot"
+                    }`}
+                  >
+                    {m.content}
+                  </div>
+                </div>
+              ))}
 
             {loading && <div className="pp-thinking">PantryPal is thinking…</div>}
 
@@ -662,6 +777,7 @@ Keep it concise and practical.
         <form onSubmit={sendMessage} className="pp-composer">
           <div className="pp-composerInner">
             <input
+              ref={inputRef}
               type="text"
               placeholder='Ask: "Make a grocery list for taco night"'
               value={input}

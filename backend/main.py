@@ -53,7 +53,7 @@ client = AzureOpenAI(
 app = FastAPI(
     title="PantryPal Backend",
     description="Backend API for the PantryPal grocery assistant.",
-    version="0.4.0",
+    version="0.5.0",
 )
 
 # CORS for local React dev
@@ -82,7 +82,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    # Option 1: frontend sends the entire conversation each time
+    # frontend sends entire conversation each time
     messages: list[ChatMessage]
 
 
@@ -150,6 +150,7 @@ class CreateShoppingList(BaseModel):
     items: Dict[str, Any] = {"items": []}
     derived_from: str = ""
 
+
 # Generate Recipes Models
 class GenerateRecipesRequest(BaseModel):
     snapshot_id: int | None = None
@@ -172,7 +173,18 @@ class GeneratedRecipe(BaseModel):
 
 class GenerateRecipesResponse(BaseModel):
     recipes: list[GeneratedRecipe] = []
-# End generate Recipes Models
+
+
+# NEW: Suggestions (AI chips)
+class SuggestionItem(BaseModel):
+    label: str        # what the chip shows
+    prompt: str       # what gets sent to chat when clicked
+    emoji: str = "✨"  # optional
+
+
+class SuggestionsResponse(BaseModel):
+    suggestions: list[SuggestionItem] = []
+
 
 def _recipe_to_out(r: Recipe) -> RecipeOut:
     return RecipeOut(
@@ -186,6 +198,7 @@ def _recipe_to_out(r: Recipe) -> RecipeOut:
         created_at=r.created_at,
     )
 
+
 # --------------------------
 # Endpoints
 # --------------------------
@@ -196,15 +209,155 @@ def health_check():
         "service": "pantryPal backend",
         "azure_endpoint_set": bool(AZURE_OPENAI_ENDPOINT),
         "deployment": AZURE_OPENAI_DEPLOYMENT,
-        "version": "0.4.0",
+        "version": "0.5.0",
     }
 
+
 # --------------------------
-# Chat (Option 1: send history from frontend)
+# NEW: AI-generated landing suggestions
+# --------------------------
+@app.get("/api/suggestions", response_model=SuggestionsResponse)
+def get_suggestions(
+    user_id: int | None = None,
+    snapshot_id: int | None = None,
+    session: Session = Depends(get_session),
+):
+    """
+    Returns 4 AI-generated "starter chips" for the landing screen.
+    - If snapshot_id is provided, uses that snapshot.
+    - Else uses the most recent snapshot if available.
+    - If user_id is provided and exists, uses dietary/budget/household prefs.
+    """
+    # Load user context (optional)
+    user_ctx: dict[str, Any] = {}
+    if user_id is not None:
+        u = session.get(UserProfile, user_id)
+        if u:
+            try:
+                prefs = json.loads(u.dietary_prefs_json or "{}")
+            except json.JSONDecodeError:
+                prefs = {}
+            user_ctx = {
+                "name": u.name,
+                "budget_style": u.budget_style,
+                "household_size": u.household_size,
+                "dietary_prefs": prefs,
+            }
+
+    # Load snapshot context (optional)
+    snap_items: list[dict[str, Any]] = []
+    snap_label: str | None = None
+
+    snap: FridgeSnapshot | None = None
+    if snapshot_id is not None:
+        snap = session.get(FridgeSnapshot, snapshot_id)
+    else:
+        snap = session.exec(
+            select(FridgeSnapshot).order_by(FridgeSnapshot.created_at.desc())
+        ).first()
+
+    if snap:
+        snap_label = snap.label
+        try:
+            parsed = json.loads(snap.items_json or "{}")
+        except json.JSONDecodeError:
+            parsed = {}
+        snap_items = parsed.get("items", []) if isinstance(parsed, dict) else []
+
+    system_prompt = """
+You are PantryPal. Generate 4 starter suggestion chips for a grocery + meal planning chat app.
+
+Return STRICT JSON only, no markdown, no extra keys, matching this schema:
+{
+  "suggestions": [
+    { "emoji": "string", "label": "string", "prompt": "string" }
+  ]
+}
+
+Rules:
+- Exactly 4 suggestions.
+- Labels should be short (2–5 words).
+- Prompts should be actionable and specific (1–2 sentences).
+- Mix types: grocery list, meal plan, budget, "use what I have", healthy/high-protein, etc.
+- If pantry items are provided, include at least 2 suggestions that use those items.
+- Avoid brand names and avoid weird niche diets unless user prefs require it.
+"""
+
+    user_prompt = {
+        "app": "PantryPal",
+        "user_context": user_ctx,
+        "latest_snapshot": {
+            "label": snap_label,
+            "items": snap_items[:30],  # keep prompt smaller
+        },
+        "ui": {
+            "audience": "general home cook",
+            "tone": "friendly, concise",
+        },
+    }
+
+    try:
+        response = client.chat.completions.create(
+            model=AZURE_OPENAI_DEPLOYMENT,
+            messages=[
+                {"role": "system", "content": system_prompt.strip()},
+                {"role": "user", "content": json.dumps(user_prompt, indent=2)},
+            ],
+        )
+        raw = response.choices[0].message.content or ""
+        parsed = json.loads(raw)
+
+        suggestions = parsed.get("suggestions", [])
+        if not isinstance(suggestions, list):
+            suggestions = []
+
+        # Light validation + fallback emojis
+        cleaned: list[SuggestionItem] = []
+        for s in suggestions[:4]:
+            if not isinstance(s, dict):
+                continue
+            label = str(s.get("label", "")).strip()
+            prompt = str(s.get("prompt", "")).strip()
+            emoji = str(s.get("emoji", "✨")).strip() or "✨"
+            if not label or not prompt:
+                continue
+            cleaned.append(SuggestionItem(label=label, prompt=prompt, emoji=emoji))
+
+        # Guarantee exactly 4 (fallbacks)
+        fallback = [
+            SuggestionItem(emoji="🌮", label="Taco night", prompt="Make a grocery list for taco night for 4 people."),
+            SuggestionItem(emoji="🗓️", label="5 dinners", prompt="Plan 5 easy dinners for this week and give me one combined grocery list."),
+            SuggestionItem(emoji="💸", label="Budget meals", prompt="Suggest 3 budget-friendly dinners under $25 total and list what to buy."),
+            SuggestionItem(emoji="🥦", label="Use what I have", prompt="Use what I have at home to suggest 3 dinners, and tell me what's missing."),
+
+        ]
+
+        if len(cleaned) < 4:
+            for f in fallback:
+                if len(cleaned) >= 4:
+                    break
+                cleaned.append(f)
+
+        return SuggestionsResponse(suggestions=cleaned[:4])
+
+    except Exception as e:
+        print("Azure OpenAI error (suggestions):", e)
+        return SuggestionsResponse(
+            suggestions=[
+                SuggestionItem(emoji="🌮", label="Taco night", prompt="Make a grocery list for taco night for 4 people."),
+                SuggestionItem(emoji="🗓️", label="5 dinners", prompt="Plan 5 easy dinners for this week and give me one combined grocery list."),
+                SuggestionItem(emoji="💸", label="Budget meals", prompt="Suggest 3 budget-friendly dinners under $25 total and list what to buy."),
+                SuggestionItem(emoji="🥦", label="Use what I have", prompt="Use what I have at home to suggest 3 dinners, and tell me what's missing."),
+                SuggestionItem(emoji="💪", label="High-protein", prompt="Create a healthy high-protein 3-day plan with a grocery list."),
+            ]
+        )
+
+
+# --------------------------
+# Chat (send history from frontend)
 # --------------------------
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(body: ChatRequest):
-    # Keep only user/assistant messages to avoid users injecting system prompts
     history = [
         {"role": m.role, "content": m.content}
         for m in body.messages
@@ -229,7 +382,9 @@ def chat(body: ChatRequest):
                         "You are PantryPal, a friendly grocery and meal-planning assistant. "
                         "Use the conversation history to remember items, constraints, and lists "
                         "the user already mentioned. Be concise but helpful, and format lists "
-                        "with bullet points when appropriate."
+                        "with bullet points when appropriate. "
+                        "Ensure your responses are relevant to groceries, meals, and shopping. "
+                        "If a user requests a recipe, ensure it is realistic."
                     ),
                 },
                 *history,
@@ -247,6 +402,8 @@ def chat(body: ChatRequest):
                 "Double-check your Azure settings and try again."
             )
         )
+
+
 # --------------------------
 # Generate Recipes
 # --------------------------
@@ -281,7 +438,6 @@ def generate_recipes(
         if not items:
             return {"recipes": []}
 
-        # 2️⃣ Prompt AI (STRICT JSON)
         system_prompt = """
 Return STRICT JSON only.
 
@@ -333,9 +489,6 @@ Prefer using what is available.
     except Exception as e:
         print("generate-recipes error:", e)
         return {"recipes": []}
-# --------------------------
-# End Generate Recipes
-# --------------------------
 
 
 # --------------------------
@@ -377,14 +530,8 @@ async def image_to_json(
                 {
                     "role": "user",
                     "content": [
-                        {
-                            "type": "text",
-                            "text": "Analyze this image and extract grocery-relevant items.",
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:{mime_type};base64,{b64_image}"},
-                        },
+                        {"type": "text", "text": "Analyze this image and extract grocery-relevant items."},
+                        {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{b64_image}"}},
                     ],
                 },
             ],
@@ -414,6 +561,7 @@ async def image_to_json(
         print("Azure OpenAI image error:", e)
         return ImageJsonResponse(data={"items": []}, snapshot_id=None)
 
+
 @app.get("/api/snapshots", response_model=List[SnapshotOut])
 def list_snapshots(session: Session = Depends(get_session)):
     snapshots = session.exec(
@@ -438,6 +586,7 @@ def list_snapshots(session: Session = Depends(get_session)):
 
     return results
 
+
 @app.get("/api/snapshots/{snapshot_id}")
 def get_snapshot(snapshot_id: int, session: Session = Depends(get_session)):
     snap = session.get(FridgeSnapshot, snapshot_id)
@@ -456,6 +605,7 @@ def get_snapshot(snapshot_id: int, session: Session = Depends(get_session)):
         "data": data,
     }
 
+
 @app.delete("/api/snapshots/{snapshot_id}")
 def delete_snapshot(snapshot_id: int, session: Session = Depends(get_session)):
     snap = session.get(FridgeSnapshot, snapshot_id)
@@ -465,6 +615,7 @@ def delete_snapshot(snapshot_id: int, session: Session = Depends(get_session)):
     session.delete(snap)
     session.commit()
     return {"ok": True}
+
 
 # --------------------------
 # Users
@@ -482,6 +633,7 @@ def create_user(body: CreateUser, session: Session = Depends(get_session)):
     session.refresh(user)
     return {"id": user.id}
 
+
 @app.get("/api/users/{user_id}")
 def get_user(user_id: int, session: Session = Depends(get_session)):
     user = session.get(UserProfile, user_id)
@@ -496,6 +648,7 @@ def get_user(user_id: int, session: Session = Depends(get_session)):
         "household_size": user.household_size,
         "created_at": user.created_at,
     }
+
 
 @app.patch("/api/users/{user_id}")
 def update_user(user_id: int, body: UpdateUser, session: Session = Depends(get_session)):
@@ -517,6 +670,7 @@ def update_user(user_id: int, body: UpdateUser, session: Session = Depends(get_s
     session.refresh(user)
     return {"ok": True}
 
+
 # --------------------------
 # Recipes
 # --------------------------
@@ -534,6 +688,7 @@ def create_recipe(body: CreateRecipe, session: Session = Depends(get_session)):
     session.commit()
     session.refresh(recipe)
     return {"id": recipe.id}
+
 
 @app.get("/api/recipes", response_model=List[RecipeOut])
 def list_recipes(
@@ -554,12 +709,14 @@ def list_recipes(
     recipes = session.exec(stmt).all()
     return [_recipe_to_out(r) for r in recipes]
 
+
 @app.get("/api/recipes/{recipe_id}", response_model=RecipeOut)
 def get_recipe(recipe_id: int, session: Session = Depends(get_session)):
     r = session.get(Recipe, recipe_id)
     if not r:
         raise HTTPException(status_code=404, detail="Not Found")
     return _recipe_to_out(r)
+
 
 @app.patch("/api/recipes/{recipe_id}", response_model=RecipeOut)
 def update_recipe(recipe_id: int, body: UpdateRecipe, session: Session = Depends(get_session)):
@@ -583,6 +740,7 @@ def update_recipe(recipe_id: int, body: UpdateRecipe, session: Session = Depends
     session.refresh(r)
     return _recipe_to_out(r)
 
+
 @app.delete("/api/recipes/{recipe_id}")
 def delete_recipe(recipe_id: int, session: Session = Depends(get_session)):
     r = session.get(Recipe, recipe_id)
@@ -592,6 +750,7 @@ def delete_recipe(recipe_id: int, session: Session = Depends(get_session)):
     session.delete(r)
     session.commit()
     return {"ok": True}
+
 
 # --------------------------
 # Shopping Lists (History)
@@ -608,6 +767,7 @@ def create_shopping_list(body: CreateShoppingList, session: Session = Depends(ge
     session.commit()
     session.refresh(sl)
     return {"id": sl.id}
+
 
 @app.get("/api/shopping-lists")
 def list_shopping_lists(user_id: int | None = None, session: Session = Depends(get_session)):
@@ -630,6 +790,7 @@ def list_shopping_lists(user_id: int | None = None, session: Session = Depends(g
             }
         )
     return out
+
 
 @app.get("/api/shopping-lists/{list_id}")
 def get_shopping_list(list_id: int, session: Session = Depends(get_session)):
