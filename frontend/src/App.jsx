@@ -464,9 +464,10 @@ Keep it concise and practical.
       >
         {/* Left rail */}
         <div className="pp-rail">
-          <div className="pp-railBrand">
-            <Carrot size={20} />
+          <div className="pp-railBrand" aria-label="PantryPal">
+            🥕
           </div>
+
 
           <RailButton
             title="Scan history"
