@@ -500,10 +500,6 @@ Keep it concise and practical.
           </RailButton>
 
           <div style={{ flex: 1 }} />
-
-          <RailButton title="Close panel" active={false} onClick={() => setActivePanel(null)}>
-            <ChevronLeft size={20} />
-          </RailButton>
         </div>
 
         {/* Expandable panel */}

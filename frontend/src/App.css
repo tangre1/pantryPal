@@ -86,22 +86,6 @@ body {
   font-size: 18px;
 }
 
-/* Rail buttons (single source of truth) */
-.pp-railBtn{
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  background: rgba(255,255,255,0.78);
-  backdrop-filter: blur(10px);
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease;
-  user-select: none;
-  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.05);
-}
-
 .pp-railBtn:hover{
   transform: translateY(-1px);
   border-color: rgba(37,99,235,0.25);
@@ -115,12 +99,42 @@ body {
   box-shadow: 0 16px 30px rgba(37,99,235,0.14);
 }
 
-/* Icons in rail (only affects SVG icon sets; emoji will ignore) */
-.pp-railBtn svg {
-  color: rgba(15, 23, 42, 0.72);
+/* ===== Rail icon centering + sizing (FIX) ===== */
+.pp-railBtn{
+  display: flex;              /* instead of grid */
+  align-items: center;
+  justify-content: center;
+  padding: 0;                 /* kill any baseline padding issues */
 }
-.pp-railBtnActive svg{
+
+/* wrapper around the icon (we added <span class="pp-railIcon"> ) */
+.pp-railIcon{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  line-height: 0;             /* IMPORTANT: prevents baseline offset */
+}
+
+/* make lucide icons consistent */
+.pp-railIcon svg{
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.25;         /* bolder so they look “right” */
+  display: block;             /* removes inline svg whitespace */
+  color: rgba(15, 23, 42, 0.70);
+}
+
+/* active color */
+.pp-railBtnActive .pp-railIcon svg{
   color: var(--brand);
+}
+
+.pp-railIcon,
+.pp-railIcon svg{
+  width: 24px;
+  height: 24px;
 }
 
 /* ---------- Panel ---------- */
