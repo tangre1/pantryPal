@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import "./App.css";
 
 const API_BASE = "http://localhost:8000";
 
@@ -15,65 +16,26 @@ const RailButton = ({ title, active, onClick, children }) => (
     type="button"
     title={title}
     onClick={onClick}
-    style={{
-      width: "44px",
-      height: "44px",
-      borderRadius: "12px",
-      border: "1px solid #e5e7eb",
-      background: active ? "#eef2ff" : "#ffffff",
-      cursor: "pointer",
-      display: "grid",
-      placeItems: "center",
-      fontSize: "18px",
-    }}
+    className={`pp-railBtn ${active ? "pp-railBtnActive" : ""}`}
   >
     {children}
   </button>
 );
 
 const PanelShell = ({ title, onClose, children }) => (
-  <div
-    style={{
-      width: "320px",
-      borderRight: "1px solid #e5e7eb",
-      background: "#ffffff",
-      display: "flex",
-      flexDirection: "column",
-    }}
-  >
-    <div
-      style={{
-        padding: "0.9rem 1rem",
-        borderBottom: "1px solid #e5e7eb",
-        background: "#f9fafb",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: "0.75rem",
-      }}
-    >
+  <div className="pp-panel">
+    <div className="pp-panelHeader">
       <div>
-        <div style={{ fontSize: "0.95rem", fontWeight: 800 }}>{title}</div>
-        <div style={{ fontSize: "0.8rem", color: "#6b7280" }}>
-          Click the icon again to hide
-        </div>
+        <div className="pp-panelTitle">{title}</div>
+        <div className="pp-panelSubtitle">Click the icon again to hide</div>
       </div>
-      <button
-        type="button"
-        onClick={onClose}
-        style={{
-          border: "1px solid #e5e7eb",
-          background: "#ffffff",
-          borderRadius: "10px",
-          padding: "0.35rem 0.6rem",
-          cursor: "pointer",
-        }}
-      >
+
+      <button type="button" onClick={onClose} className="pp-panelClose">
         ✕
       </button>
     </div>
 
-    <div style={{ flex: 1, overflowY: "auto", padding: "1rem" }}>{children}</div>
+    <div className="pp-panelBody">{children}</div>
   </div>
 );
 
@@ -416,31 +378,10 @@ Keep it concise and practical.
   };
 
   return (
-    <div
-      style={{
-        width: "100vw",
-        height: "100vh",
-        display: "flex",
-        background: "#f3f4f6",
-        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-      }}
-    >
+    <div className="pp-shell">
       {/* Left rail (icons) */}
-      <div
-        style={{
-          width: "72px",
-          borderRight: "1px solid #e5e7eb",
-          background: "#ffffff",
-          padding: "0.75rem",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.6rem",
-          alignItems: "center",
-        }}
-      >
-        <div style={{ fontWeight: 900, fontSize: "0.9rem", marginBottom: "0.25rem" }}>
-          🥕
-        </div>
+      <div className="pp-rail">
+        <div className="pp-railBrand">🥕</div>
 
         <RailButton
           title="Scan history"
@@ -476,102 +417,40 @@ Keep it concise and practical.
       {/* Expandable panel */}
       {activePanel === PANELS.HISTORY && (
         <PanelShell title="Scan History" onClose={() => setActivePanel(null)}>
-          <button
-            type="button"
-            onClick={fetchSnapshots}
-            style={{
-              width: "100%",
-              borderRadius: "10px",
-              border: "1px solid #d1d5db",
-              padding: "0.55rem 0.7rem",
-              background: "#ffffff",
-              cursor: "pointer",
-              fontSize: "0.85rem",
-              marginBottom: "0.75rem",
-            }}
-          >
+          <button type="button" onClick={fetchSnapshots} className="pp-btn">
             Refresh
           </button>
 
-          {loadingSnapshots && (
-            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>Loading scans…</div>
-          )}
+          {loadingSnapshots && <div className="pp-muted">Loading scans…</div>}
 
           {!loadingSnapshots && snapshots.length === 0 && (
-            <div style={{ fontSize: "0.85rem", color: "#9ca3af" }}>
-              No scans yet. Upload an image to create one.
-            </div>
+            <div className="pp-muted">No scans yet. Upload an image to create one.</div>
           )}
 
           {snapshots.map((snap) => (
-            <div
-              key={snap.id}
-              style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: "12px",
-                padding: "0.75rem",
-                marginBottom: "0.75rem",
-                background: "#ffffff",
-                boxShadow: "0 6px 16px rgba(0,0,0,0.04)",
-              }}
-            >
-              <div
-                style={{
-                  fontWeight: 800,
-                  fontSize: "0.85rem",
-                  color: "#111827",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-                title={snap.label}
-              >
+            <div key={snap.id} className="pp-card">
+              <div className="pp-cardTitle" title={snap.label}>
                 {snap.label || `Snapshot #${snap.id}`}
               </div>
 
-              <div style={{ marginTop: "0.25rem", fontSize: "0.75rem", color: "#6b7280" }}>
-                {formatDateTime(snap.created_at)}
+              <div className="pp-muted">{formatDateTime(snap.created_at)}</div>
+              <div className="pp-muted">Items: {snap?.data?.items?.length ?? 0}</div>
+
+              <div style={{ marginTop: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => handleUseSnapshot(snap)}
+                  className="pp-btn pp-btnPrimary"
+                >
+                  Use this scan
+                </button>
+
+                <div style={{ height: 8 }} />
+
+                <button type="button" onClick={() => deleteSnapshot(snap.id)} className="pp-btn">
+                  Delete
+                </button>
               </div>
-
-              <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: "#6b7280" }}>
-                Items: {snap?.data?.items?.length ?? 0}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleUseSnapshot(snap)}
-                style={{
-                  marginTop: "0.6rem",
-                  width: "100%",
-                  borderRadius: "999px",
-                  border: "none",
-                  padding: "0.5rem 0.8rem",
-                  background: "#2563eb",
-                  color: "#ffffff",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                }}
-              >
-                Use this scan
-              </button>
-
-              <button
-                type="button"
-                onClick={() => deleteSnapshot(snap.id)}
-                style={{
-                  marginTop: "0.45rem",
-                  width: "100%",
-                  borderRadius: "999px",
-                  border: "1px solid #d1d5db",
-                  padding: "0.5rem 0.8rem",
-                  background: "#ffffff",
-                  color: "#111827",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
-                }}
-              >
-                Delete
-              </button>
             </div>
           ))}
         </PanelShell>
@@ -579,142 +458,83 @@ Keep it concise and practical.
 
       {activePanel === PANELS.RECIPES && (
         <PanelShell title="Recipes" onClose={() => setActivePanel(null)}>
-          <button
-            type="button"
-            onClick={fetchRecipes}
-            style={{
-              width: "100%",
-              borderRadius: "10px",
-              border: "1px solid #d1d5db",
-              padding: "0.55rem 0.7rem",
-              background: "#ffffff",
-              cursor: "pointer",
-              fontSize: "0.85rem",
-              marginBottom: "0.75rem",
-            }}
-          >
+          <button type="button" onClick={fetchRecipes} className="pp-btn">
             Refresh
           </button>
 
           {/* Create Recipe */}
-          <div
-            style={{
-              border: "1px solid #e5e7eb",
-              borderRadius: "12px",
-              padding: "0.75rem",
-              background: "#ffffff",
-              marginBottom: "0.75rem",
-            }}
-          >
-            <div style={{ fontWeight: 800, marginBottom: "0.5rem" }}>Create a recipe</div>
+          <div className="pp-card" style={{ marginTop: 12 }}>
+            <div className="pp-cardTitle" style={{ marginBottom: 10 }}>
+              Create a recipe
+            </div>
 
             <input
               value={newRecipeTitle}
               onChange={(e) => setNewRecipeTitle(e.target.value)}
               placeholder="Title (required)"
-              style={{
-                width: "100%",
-                padding: "0.55rem 0.7rem",
-                borderRadius: "10px",
-                border: "1px solid #d1d5db",
-                marginBottom: "0.5rem",
-                fontSize: "0.85rem",
-              }}
+              className="pp-input"
+              style={{ borderRadius: 12 }}
             />
+
+            <div style={{ height: 10 }} />
 
             <input
               value={newRecipeTags}
               onChange={(e) => setNewRecipeTags(e.target.value)}
               placeholder="Tags (comma separated) e.g. dinner, easy"
-              style={{
-                width: "100%",
-                padding: "0.55rem 0.7rem",
-                borderRadius: "10px",
-                border: "1px solid #d1d5db",
-                marginBottom: "0.5rem",
-                fontSize: "0.85rem",
-              }}
+              className="pp-input"
+              style={{ borderRadius: 12 }}
             />
+
+            <div style={{ height: 10 }} />
 
             <textarea
               value={newRecipeIngredients}
               onChange={(e) => setNewRecipeIngredients(e.target.value)}
               placeholder={"Ingredients (one per line)\nExample:\nChicken\nRice\nBroccoli"}
               rows={4}
-              style={{
-                width: "100%",
-                padding: "0.55rem 0.7rem",
-                borderRadius: "10px",
-                border: "1px solid #d1d5db",
-                marginBottom: "0.5rem",
-                fontSize: "0.85rem",
-                resize: "vertical",
-              }}
+              className="pp-input"
+              style={{ borderRadius: 12, resize: "vertical" }}
             />
+
+            <div style={{ height: 10 }} />
 
             <textarea
               value={newRecipeSteps}
               onChange={(e) => setNewRecipeSteps(e.target.value)}
               placeholder={"Steps (one per line)\nExample:\nCook chicken\nCook rice\nServe together"}
               rows={4}
-              style={{
-                width: "100%",
-                padding: "0.55rem 0.7rem",
-                borderRadius: "10px",
-                border: "1px solid #d1d5db",
-                marginBottom: "0.6rem",
-                fontSize: "0.85rem",
-                resize: "vertical",
-              }}
+              className="pp-input"
+              style={{ borderRadius: 12, resize: "vertical" }}
             />
+
+            <div style={{ height: 12 }} />
 
             <button
               type="button"
               onClick={createRecipe}
               disabled={creatingRecipe}
-              style={{
-                width: "100%",
-                borderRadius: "999px",
-                border: "none",
-                padding: "0.55rem 0.8rem",
-                background: creatingRecipe ? "#9ca3af" : "#2563eb",
-                color: "#ffffff",
-                cursor: creatingRecipe ? "default" : "pointer",
-                fontSize: "0.85rem",
-                opacity: creatingRecipe ? 0.8 : 1,
-              }}
+              className="pp-btn pp-btnPrimary"
+              style={{ opacity: creatingRecipe ? 0.7 : 1 }}
             >
               {creatingRecipe ? "Saving…" : "Save recipe"}
             </button>
           </div>
 
           {/* Recipes list */}
-          {loadingRecipes && (
-            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>Loading recipes…</div>
-          )}
+          {loadingRecipes && <div className="pp-muted">Loading recipes…</div>}
 
           {!loadingRecipes && recipes.length === 0 && (
-            <div style={{ fontSize: "0.85rem", color: "#9ca3af" }}>
-              No recipes yet. Create one above.
-            </div>
+            <div className="pp-muted">No recipes yet. Create one above.</div>
           )}
 
           {recipes.map((r) => (
-            <div
-              key={r.id}
-              style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: "12px",
-                padding: "0.75rem",
-                marginBottom: "0.75rem",
-                background: "#ffffff",
-              }}
-            >
-              <div style={{ fontWeight: 800 }}>{r.title}</div>
-              <div style={{ fontSize: "0.8rem", color: "#6b7280", marginTop: "0.25rem" }}>
+            <div key={r.id} className="pp-card">
+              <div className="pp-cardTitle">{r.title}</div>
+              <div className="pp-muted">
                 {Array.isArray(r.tags) ? r.tags.join(", ") : ""}
               </div>
-              <div style={{ fontSize: "0.75rem", color: "#6b7280", marginTop: "0.35rem" }}>
+              <div className="pp-muted">
                 Ingredients: {Array.isArray(r.ingredients) ? r.ingredients.length : 0} • Steps:{" "}
                 {Array.isArray(r.steps) ? r.steps.length : 0}
               </div>
@@ -725,52 +545,45 @@ Keep it concise and practical.
 
       {activePanel === PANELS.USER && (
         <PanelShell title="User Profile" onClose={() => setActivePanel(null)}>
-          <div style={{ fontSize: "0.85rem", color: "#6b7280", marginBottom: "0.75rem" }}>
+          <div className="pp-muted" style={{ marginBottom: 12 }}>
             For demo purposes this tries to load user id <b>1</b>:
-            <div style={{ marginTop: "0.25rem", fontFamily: "monospace", fontSize: "0.8rem" }}>
+            <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 12 }}>
               GET /api/users/1
             </div>
           </div>
 
-          {loadingUser && (
-            <div style={{ fontSize: "0.85rem", color: "#6b7280" }}>Loading user…</div>
-          )}
+          {loadingUser && <div className="pp-muted">Loading user…</div>}
 
           {!loadingUser && !user && (
-            <div style={{ fontSize: "0.85rem", color: "#9ca3af" }}>
+            <div className="pp-muted">
               No user loaded yet. Create one via POST /api/users, or change the fetchUser()
               function to the correct user id.
             </div>
           )}
 
           {user && (
-            <div
-              style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: "12px",
-                padding: "0.9rem",
-                background: "#ffffff",
-              }}
-            >
-              <div style={{ fontWeight: 900, fontSize: "1rem" }}>{user.name}</div>
-              <div style={{ marginTop: "0.35rem", fontSize: "0.85rem", color: "#374151" }}>
+            <div className="pp-card">
+              <div style={{ fontWeight: 900, fontSize: 16 }}>{user.name}</div>
+
+              <div className="pp-muted" style={{ marginTop: 8, color: "var(--text)" }}>
                 Budget: <b>{user.budget_style}</b>
               </div>
-              <div style={{ marginTop: "0.25rem", fontSize: "0.85rem", color: "#374151" }}>
+              <div className="pp-muted" style={{ color: "var(--text)" }}>
                 Household size: <b>{user.household_size}</b>
               </div>
 
-              <div style={{ marginTop: "0.75rem", fontSize: "0.8rem", color: "#6b7280" }}>
+              <div className="pp-muted" style={{ marginTop: 12 }}>
                 Dietary prefs:
               </div>
+
               <pre
                 style={{
-                  marginTop: "0.35rem",
-                  padding: "0.6rem",
-                  background: "#111827",
+                  marginTop: 8,
+                  padding: 12,
+                  background: "#0b1220",
                   color: "#e5e7eb",
-                  borderRadius: "10px",
-                  fontSize: "0.75rem",
+                  borderRadius: 12,
+                  fontSize: 12,
                   overflowX: "auto",
                 }}
               >
@@ -782,49 +595,18 @@ Keep it concise and practical.
       )}
 
       {/* Main chat panel */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <div className="pp-main">
         {/* Top header */}
-        <header
-          style={{
-            padding: "0.75rem 1rem",
-            borderBottom: "1px solid #e5e7eb",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            background: "#f9fafb",
-          }}
-        >
+        <header className="pp-topbar">
           <div>
-            <h1 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800 }}>PantryPal</h1>
-            <p style={{ margin: 0, fontSize: "0.8rem", color: "#6b7280" }}>
-              Grocery & meal planning assistant
-            </p>
+            <h1 className="pp-title">PantryPal</h1>
+            <p className="pp-subtitle">Grocery & meal planning assistant</p>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span
-              style={{
-                fontSize: "0.75rem",
-                padding: "0.25rem 0.6rem",
-                borderRadius: "999px",
-                background: "#e5f2ff",
-                color: "#2563eb",
-              }}
-            >
-              beta
-            </span>
+          <div className="pp-actions">
+            <span className="pp-pill">beta</span>
 
-            <label
-              style={{
-                fontSize: "0.8rem",
-                padding: "0.25rem 0.6rem",
-                borderRadius: "999px",
-                border: "1px solid #d1d5db",
-                background: "#ffffff",
-                cursor: uploading ? "default" : "pointer",
-                opacity: uploading ? 0.6 : 1,
-              }}
-            >
+            <label className={`pp-upload ${uploading ? "pp-uploadDisabled" : ""}`}>
               {uploading ? "Analyzing..." : "Upload image"}
               <input
                 type="file"
@@ -837,103 +619,57 @@ Keep it concise and practical.
         </header>
 
         {/* Messages */}
-        <div
-          style={{
-            flex: 1,
-            padding: "1rem",
-            overflowY: "auto",
-            background: "#f9fafb",
-          }}
-        >
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              style={{
-                display: "flex",
-                justifyContent: m.role === "user" ? "flex-end" : "flex-start",
-                marginBottom: "0.5rem",
-              }}
-            >
+        <div className="pp-chatWrap">
+          <div className="pp-chatColumn">
+            {messages.map((m) => (
               <div
+                key={m.id}
+                className={`pp-row ${m.role === "user" ? "pp-rowUser" : "pp-rowBot"}`}
+              >
+                <div
+                  className={`pp-bubble ${
+                    m.role === "user" ? "pp-bubbleUser" : "pp-bubbleBot"
+                  }`}
+                >
+                  {m.content}
+                </div>
+              </div>
+            ))}
+
+            {loading && <div className="pp-thinking">PantryPal is thinking…</div>}
+
+            {imageResult && (
+              <pre
                 style={{
-                  maxWidth: "80%",
-                  padding: "0.6rem 0.8rem",
-                  borderRadius: "12px",
-                  fontSize: "0.9rem",
-                  whiteSpace: "pre-wrap",
-                  background: m.role === "user" ? "#2563eb" : "#e5e7eb",
-                  color: m.role === "user" ? "#ffffff" : "#111827",
+                  marginTop: 14,
+                  padding: 12,
+                  background: "#0b1220",
+                  color: "#e5e7eb",
+                  borderRadius: 12,
+                  fontSize: 12,
+                  overflowX: "auto",
                 }}
               >
-                {m.content}
-              </div>
-            </div>
-          ))}
+                {JSON.stringify(imageResult, null, 2)}
+              </pre>
+            )}
 
-          {loading && (
-            <div style={{ fontSize: "0.8rem", color: "#6b7280", marginTop: "0.25rem" }}>
-              PantryPal is thinking…
-            </div>
-          )}
-
-          {imageResult && (
-            <pre
-              style={{
-                marginTop: "0.75rem",
-                padding: "0.5rem",
-                background: "#111827",
-                color: "#e5e7eb",
-                borderRadius: "8px",
-                fontSize: "0.75rem",
-                overflowX: "auto",
-              }}
-            >
-              {JSON.stringify(imageResult, null, 2)}
-            </pre>
-          )}
-
-          <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} />
+          </div>
         </div>
 
         {/* Input */}
-        <form
-          onSubmit={sendMessage}
-          style={{
-            borderTop: "1px solid #e5e7eb",
-            padding: "0.75rem",
-            background: "#f9fafb",
-          }}
-        >
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <form onSubmit={sendMessage} className="pp-composer">
+          <div className="pp-composerInner">
             <input
               type="text"
               placeholder='Ask: "Make a grocery list for taco night"'
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              style={{
-                flex: 1,
-                padding: "0.6rem 0.8rem",
-                borderRadius: "999px",
-                border: "1px solid #d1d5db",
-                fontSize: "0.9rem",
-                outline: "none",
-              }}
+              className="pp-input"
             />
 
-            <button
-              type="submit"
-              disabled={loading || !input.trim()}
-              style={{
-                borderRadius: "999px",
-                border: "none",
-                padding: "0.6rem 1rem",
-                fontSize: "0.9rem",
-                cursor: loading ? "default" : "pointer",
-                background: loading ? "#9ca3af" : "#2563eb",
-                color: "#ffffff",
-                opacity: loading ? 0.7 : 1,
-              }}
-            >
+            <button type="submit" disabled={loading || !input.trim()} className="pp-send">
               {loading ? "Sending…" : "Send"}
             </button>
           </div>
