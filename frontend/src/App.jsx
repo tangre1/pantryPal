@@ -13,11 +13,12 @@ const PANELS = {
 };
 
 // UI helpers (kept outside App so they don't get re-created each render)
-const RailButton = ({ title, active, onClick, children }) => (
+const RailButton = ({ title, active, onClick, onMouseEnter, children }) => (
   <button
     type="button"
     title={title}
     onClick={onClick}
+    onMouseEnter={onMouseEnter}
     className={`pp-railBtn ${active ? "pp-railBtnActive" : ""}`}
   >
     {children}
@@ -29,7 +30,7 @@ const PanelShell = ({ title, onClose, children }) => (
     <div className="pp-panelHeader">
       <div>
         <div className="pp-panelTitle">{title}</div>
-        <div className="pp-panelSubtitle">Click the icon again to hide</div>
+        <div className="pp-panelSubtitle">Hover away to hide</div>
       </div>
 
       <button type="button" onClick={onClose} className="pp-panelClose">
@@ -99,10 +100,14 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Toggle sidebar panels
+  // Toggle sidebar panels (click behavior)
   const togglePanel = (panelName) => {
     setActivePanel((prev) => (prev === panelName ? null : panelName));
   };
+
+  // Hover behavior for left rail + panel
+  const openPanel = (panelName) => setActivePanel(panelName);
+  const closePanel = () => setActivePanel(null);
 
   // -----------------------------
   // API: snapshots
@@ -443,218 +448,224 @@ Keep it concise and practical.
 
   return (
     <div className="pp-shell">
-      {/* Left rail (icons) */}
-      <div className="pp-rail">
-        <div className="pp-railBrand">🥕</div>
+      {/* Left side hover zone (rail + panel) */}
+      <div className="pp-leftZone" onMouseLeave={closePanel}>
+        {/* Left rail (icons) */}
+        <div className="pp-rail">
+          <div className="pp-railBrand">🥕</div>
 
-        <RailButton
-          title="Scan history"
-          active={activePanel === PANELS.HISTORY}
-          onClick={() => togglePanel(PANELS.HISTORY)}
-        >
-          🕒
-        </RailButton>
+          <RailButton
+            title="Scan history"
+            active={activePanel === PANELS.HISTORY}
+            onClick={() => togglePanel(PANELS.HISTORY)}
+            onMouseEnter={() => openPanel(PANELS.HISTORY)}
+          >
+            🕒
+          </RailButton>
 
-        <RailButton
-          title="Recipes"
-          active={activePanel === PANELS.RECIPES}
-          onClick={() => togglePanel(PANELS.RECIPES)}
-        >
-          📖
-        </RailButton>
+          <RailButton
+            title="Recipes"
+            active={activePanel === PANELS.RECIPES}
+            onClick={() => togglePanel(PANELS.RECIPES)}
+            onMouseEnter={() => openPanel(PANELS.RECIPES)}
+          >
+            📖
+          </RailButton>
 
-        <RailButton
-          title="User profile"
-          active={activePanel === PANELS.USER}
-          onClick={() => togglePanel(PANELS.USER)}
-        >
-          👤
-        </RailButton>
+          <RailButton
+            title="User profile"
+            active={activePanel === PANELS.USER}
+            onClick={() => togglePanel(PANELS.USER)}
+            onMouseEnter={() => openPanel(PANELS.USER)}
+          >
+            👤
+          </RailButton>
 
-        <div style={{ flex: 1 }} />
+          <div style={{ flex: 1 }} />
 
-        <RailButton title="Close panel" active={false} onClick={() => setActivePanel(null)}>
-          ⬅️
-        </RailButton>
-      </div>
+          <RailButton title="Close panel" active={false} onClick={closePanel}>
+            ⬅️
+          </RailButton>
+        </div>
 
-      {/* Expandable panel */}
-      {activePanel === PANELS.HISTORY && (
-        <PanelShell title="Scan History" onClose={() => setActivePanel(null)}>
-          <button type="button" onClick={fetchSnapshots} className="pp-btn">
-            Refresh
-          </button>
-
-          {loadingSnapshots && <div className="pp-muted">Loading scans…</div>}
-
-          {!loadingSnapshots && snapshots.length === 0 && (
-            <div className="pp-muted">No scans yet. Upload an image to create one.</div>
-          )}
-
-          {snapshots.map((snap) => (
-            <div key={snap.id} className="pp-card">
-              <div className="pp-cardTitle" title={snap.label}>
-                {snap.label || `Snapshot #${snap.id}`}
-              </div>
-
-              <div className="pp-muted">{formatDateTime(snap.created_at)}</div>
-              <div className="pp-muted">Items: {snap?.data?.items?.length ?? 0}</div>
-
-              <div style={{ marginTop: 10 }}>
-                <button
-                  type="button"
-                  onClick={() => handleUseSnapshot(snap)}
-                  className="pp-btn pp-btnPrimary"
-                >
-                  Use this scan
-                </button>
-
-                <div style={{ height: 8 }} />
-
-                <button type="button" onClick={() => deleteSnapshot(snap.id)} className="pp-btn">
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
-        </PanelShell>
-      )}
-
-      {activePanel === PANELS.RECIPES && (
-        <PanelShell title="Recipes" onClose={() => setActivePanel(null)}>
-          <button type="button" onClick={fetchRecipes} className="pp-btn">
-            Refresh
-          </button>
-
-          {/* Create Recipe */}
-          <div className="pp-card" style={{ marginTop: 12 }}>
-            <div className="pp-cardTitle" style={{ marginBottom: 10 }}>
-              Create a recipe
-            </div>
-
-            <input
-              value={newRecipeTitle}
-              onChange={(e) => setNewRecipeTitle(e.target.value)}
-              placeholder="Title (required)"
-              className="pp-input"
-              style={{ borderRadius: 12 }}
-            />
-
-            <div style={{ height: 10 }} />
-
-            <input
-              value={newRecipeTags}
-              onChange={(e) => setNewRecipeTags(e.target.value)}
-              placeholder="Tags (comma separated) e.g. dinner, easy"
-              className="pp-input"
-              style={{ borderRadius: 12 }}
-            />
-
-            <div style={{ height: 10 }} />
-
-            <textarea
-              value={newRecipeIngredients}
-              onChange={(e) => setNewRecipeIngredients(e.target.value)}
-              placeholder={"Ingredients (one per line)\nExample:\nChicken\nRice\nBroccoli"}
-              rows={4}
-              className="pp-input"
-              style={{ borderRadius: 12, resize: "vertical" }}
-            />
-
-            <div style={{ height: 10 }} />
-
-            <textarea
-              value={newRecipeSteps}
-              onChange={(e) => setNewRecipeSteps(e.target.value)}
-              placeholder={"Steps (one per line)\nExample:\nCook chicken\nCook rice\nServe together"}
-              rows={4}
-              className="pp-input"
-              style={{ borderRadius: 12, resize: "vertical" }}
-            />
-
-            <div style={{ height: 12 }} />
-
-            <button
-              type="button"
-              onClick={createRecipe}
-              disabled={creatingRecipe}
-              className="pp-btn pp-btnPrimary"
-              style={{ opacity: creatingRecipe ? 0.7 : 1 }}
-            >
-              {creatingRecipe ? "Saving…" : "Save recipe"}
+        {/* Expandable panel */}
+        {activePanel === PANELS.HISTORY && (
+          <PanelShell title="Scan History" onClose={closePanel}>
+            <button type="button" onClick={fetchSnapshots} className="pp-btn">
+              Refresh
             </button>
-          </div>
 
-          {/* Recipes list */}
-          {loadingRecipes && <div className="pp-muted">Loading recipes…</div>}
+            {loadingSnapshots && <div className="pp-muted">Loading scans…</div>}
 
-          {!loadingRecipes && recipes.length === 0 && (
-            <div className="pp-muted">No recipes yet. Create one above.</div>
-          )}
+            {!loadingSnapshots && snapshots.length === 0 && (
+              <div className="pp-muted">No scans yet. Upload an image to create one.</div>
+            )}
 
-          {recipes.map((r) => (
-            <div key={r.id} className="pp-card">
-              <div className="pp-cardTitle">{r.title}</div>
-              <div className="pp-muted">{Array.isArray(r.tags) ? r.tags.join(", ") : ""}</div>
-              <div className="pp-muted">
-                Ingredients: {Array.isArray(r.ingredients) ? r.ingredients.length : 0} • Steps:{" "}
-                {Array.isArray(r.steps) ? r.steps.length : 0}
+            {snapshots.map((snap) => (
+              <div key={snap.id} className="pp-card">
+                <div className="pp-cardTitle" title={snap.label}>
+                  {snap.label || `Snapshot #${snap.id}`}
+                </div>
+
+                <div className="pp-muted">{formatDateTime(snap.created_at)}</div>
+                <div className="pp-muted">Items: {snap?.data?.items?.length ?? 0}</div>
+
+                <div style={{ marginTop: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => handleUseSnapshot(snap)}
+                    className="pp-btn pp-btnPrimary"
+                  >
+                    Use this scan
+                  </button>
+
+                  <div style={{ height: 8 }} />
+
+                  <button type="button" onClick={() => deleteSnapshot(snap.id)} className="pp-btn">
+                    Delete
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-        </PanelShell>
-      )}
+            ))}
+          </PanelShell>
+        )}
 
-      {activePanel === PANELS.USER && (
-        <PanelShell title="User Profile" onClose={() => setActivePanel(null)}>
-          <div className="pp-muted" style={{ marginBottom: 12 }}>
-            For demo purposes this tries to load user id <b>1</b>:
-            <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 12 }}>
-              GET /api/users/1
-            </div>
-          </div>
+        {activePanel === PANELS.RECIPES && (
+          <PanelShell title="Recipes" onClose={closePanel}>
+            <button type="button" onClick={fetchRecipes} className="pp-btn">
+              Refresh
+            </button>
 
-          {loadingUser && <div className="pp-muted">Loading user…</div>}
-
-          {!loadingUser && !user && (
-            <div className="pp-muted">
-              No user loaded yet. Create one via POST /api/users, or change the fetchUser()
-              function to the correct user id.
-            </div>
-          )}
-
-          {user && (
-            <div className="pp-card">
-              <div style={{ fontWeight: 900, fontSize: 16 }}>{user.name}</div>
-
-              <div className="pp-muted" style={{ marginTop: 8, color: "var(--text)" }}>
-                Budget: <b>{user.budget_style}</b>
-              </div>
-              <div className="pp-muted" style={{ color: "var(--text)" }}>
-                Household size: <b>{user.household_size}</b>
+            {/* Create Recipe */}
+            <div className="pp-card" style={{ marginTop: 12 }}>
+              <div className="pp-cardTitle" style={{ marginBottom: 10 }}>
+                Create a recipe
               </div>
 
-              <div className="pp-muted" style={{ marginTop: 12 }}>
-                Dietary prefs:
-              </div>
+              <input
+                value={newRecipeTitle}
+                onChange={(e) => setNewRecipeTitle(e.target.value)}
+                placeholder="Title (required)"
+                className="pp-input"
+                style={{ borderRadius: 12 }}
+              />
 
-              <pre
-                style={{
-                  marginTop: 8,
-                  padding: 12,
-                  background: "#0b1220",
-                  color: "#e5e7eb",
-                  borderRadius: 12,
-                  fontSize: 12,
-                  overflowX: "auto",
-                }}
+              <div style={{ height: 10 }} />
+
+              <input
+                value={newRecipeTags}
+                onChange={(e) => setNewRecipeTags(e.target.value)}
+                placeholder="Tags (comma separated) e.g. dinner, easy"
+                className="pp-input"
+                style={{ borderRadius: 12 }}
+              />
+
+              <div style={{ height: 10 }} />
+
+              <textarea
+                value={newRecipeIngredients}
+                onChange={(e) => setNewRecipeIngredients(e.target.value)}
+                placeholder={"Ingredients (one per line)\nExample:\nChicken\nRice\nBroccoli"}
+                rows={4}
+                className="pp-input"
+                style={{ borderRadius: 12, resize: "vertical" }}
+              />
+
+              <div style={{ height: 10 }} />
+
+              <textarea
+                value={newRecipeSteps}
+                onChange={(e) => setNewRecipeSteps(e.target.value)}
+                placeholder={"Steps (one per line)\nExample:\nCook chicken\nCook rice\nServe together"}
+                rows={4}
+                className="pp-input"
+                style={{ borderRadius: 12, resize: "vertical" }}
+              />
+
+              <div style={{ height: 12 }} />
+
+              <button
+                type="button"
+                onClick={createRecipe}
+                disabled={creatingRecipe}
+                className="pp-btn pp-btnPrimary"
+                style={{ opacity: creatingRecipe ? 0.7 : 1 }}
               >
-                {JSON.stringify(user.dietary_prefs, null, 2)}
-              </pre>
+                {creatingRecipe ? "Saving…" : "Save recipe"}
+              </button>
             </div>
-          )}
-        </PanelShell>
-      )}
+
+            {/* Recipes list */}
+            {loadingRecipes && <div className="pp-muted">Loading recipes…</div>}
+
+            {!loadingRecipes && recipes.length === 0 && (
+              <div className="pp-muted">No recipes yet. Create one above.</div>
+            )}
+
+            {recipes.map((r) => (
+              <div key={r.id} className="pp-card">
+                <div className="pp-cardTitle">{r.title}</div>
+                <div className="pp-muted">{Array.isArray(r.tags) ? r.tags.join(", ") : ""}</div>
+                <div className="pp-muted">
+                  Ingredients: {Array.isArray(r.ingredients) ? r.ingredients.length : 0} • Steps:{" "}
+                  {Array.isArray(r.steps) ? r.steps.length : 0}
+                </div>
+              </div>
+            ))}
+          </PanelShell>
+        )}
+
+        {activePanel === PANELS.USER && (
+          <PanelShell title="User Profile" onClose={closePanel}>
+            <div className="pp-muted" style={{ marginBottom: 12 }}>
+              For demo purposes this tries to load user id <b>1</b>:
+              <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 12 }}>
+                GET /api/users/1
+              </div>
+            </div>
+
+            {loadingUser && <div className="pp-muted">Loading user…</div>}
+
+            {!loadingUser && !user && (
+              <div className="pp-muted">
+                No user loaded yet. Create one via POST /api/users, or change the fetchUser()
+                function to the correct user id.
+              </div>
+            )}
+
+            {user && (
+              <div className="pp-card">
+                <div style={{ fontWeight: 900, fontSize: 16 }}>{user.name}</div>
+
+                <div className="pp-muted" style={{ marginTop: 8, color: "var(--text)" }}>
+                  Budget: <b>{user.budget_style}</b>
+                </div>
+                <div className="pp-muted" style={{ color: "var(--text)" }}>
+                  Household size: <b>{user.household_size}</b>
+                </div>
+
+                <div className="pp-muted" style={{ marginTop: 12 }}>
+                  Dietary prefs:
+                </div>
+
+                <pre
+                  style={{
+                    marginTop: 8,
+                    padding: 12,
+                    background: "#0b1220",
+                    color: "#e5e7eb",
+                    borderRadius: 12,
+                    fontSize: 12,
+                    overflowX: "auto",
+                  }}
+                >
+                  {JSON.stringify(user.dietary_prefs, null, 2)}
+                </pre>
+              </div>
+            )}
+          </PanelShell>
+        )}
+      </div>
 
       {/* Main chat panel */}
       <div className="pp-main">
@@ -744,14 +755,9 @@ Keep it concise and practical.
                   className={`pp-row ${m.role === "user" ? "pp-rowUser" : "pp-rowBot"}`}
                 >
                   <div
-                    className={`pp-bubble ${
-                      m.role === "user" ? "pp-bubbleUser" : "pp-bubbleBot"
-                    }`}
+                    className={`pp-bubble ${m.role === "user" ? "pp-bubbleUser" : "pp-bubbleBot"}`}
                   >
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {m.content}
-                    </ReactMarkdown>
-
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                   </div>
                 </div>
               ))}
