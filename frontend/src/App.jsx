@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import "./App.css";
 
 const API_BASE = "http://localhost:8000";
@@ -746,7 +748,10 @@ Keep it concise and practical.
                       m.role === "user" ? "pp-bubbleUser" : "pp-bubbleBot"
                     }`}
                   >
-                    {m.content}
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {m.content}
+                    </ReactMarkdown>
+
                   </div>
                 </div>
               ))}

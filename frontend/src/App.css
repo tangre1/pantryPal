@@ -523,3 +523,40 @@ bar{
   background: rgba(37,99,235,0.04);
 }
 
+/* Nice markdown inside bubbles */
+.pp-bubble :where(h1,h2,h3){
+  margin: 0.2rem 0 0.5rem;
+  line-height: 1.2;
+}
+.pp-bubble :where(h3){
+  font-size: 15px;
+}
+.pp-bubble :where(p){
+  margin: 0.35rem 0;
+}
+.pp-bubble :where(ul,ol){
+  margin: 0.35rem 0 0.35rem 1.1rem;
+  padding: 0;
+}
+.pp-bubble :where(li){
+  margin: 0.18rem 0;
+}
+.pp-bubble :where(strong){
+  font-weight: 900;
+}
+.pp-bubble :where(code){
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+  padding: 0.15rem 0.35rem;
+  border-radius: 8px;
+  background: rgba(15,23,42,0.06);
+  border: 1px solid rgba(15,23,42,0.08);
+}
+.pp-bubble :where(pre){
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  border-radius: 14px;
+  overflow: auto;
+  background: rgba(15,23,42,0.06);
+  border: 1px solid rgba(15,23,42,0.08);
+}
