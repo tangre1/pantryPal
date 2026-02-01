@@ -50,15 +50,27 @@ body {
   background: var(--bg);
 }
 
+/* LEFT column = rail + panel */
+.pp-left{
+  display: flex;
+  height: 100vh;
+}
+
+/* ---------- Rail ---------- */
 .pp-rail{
   width: 78px;
   padding: 14px 10px;
   background: var(--panel);
   border-right: 1px solid var(--border);
+
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+
+  /* Center the whole icon stack vertically */
+  justify-content: center;
+
+  gap: 14px;
 }
 
 /* Brand badge */
@@ -103,7 +115,7 @@ body {
   box-shadow: 0 16px 30px rgba(37,99,235,0.14);
 }
 
-/* Icons in rail */
+/* Icons in rail (only affects SVG icon sets; emoji will ignore) */
 .pp-railBtn svg {
   color: rgba(15, 23, 42, 0.72);
 }
@@ -111,12 +123,20 @@ body {
   color: var(--brand);
 }
 
+/* ---------- Panel ---------- */
+/* MERGED: this replaces your duplicate .pp-panel blocks */
 .pp-panel{
   width: 340px;
+  min-width: 340px;
+
   background: var(--panel);
   border-right: 1px solid var(--border);
+
   display: flex;
   flex-direction: column;
+
+  /* Full height next to rail */
+  height: 100%;
 }
 
 .pp-panelHeader{
@@ -206,7 +226,7 @@ body {
 .pp-pill{
   font-size: 12px;
   padding: 6px 10px;
-  border-radius: 999px; /* FIXED */
+  border-radius: 999px;
   background: rgba(37,99,235,0.10);
   color: var(--brand);
   border: 1px solid rgba(37,99,235,0.18);
@@ -258,7 +278,7 @@ body {
   gap: 10px;
 }
 
-.pp-landing {
+.pp-landing{
   width: 100%;
   margin-top: 28px;
   display: flex;
@@ -267,9 +287,7 @@ body {
 }
 
 /* Message row */
-.pp-row{
-  display: flex;
-}
+.pp-row{ display: flex; }
 .pp-rowUser{ justify-content: flex-end; }
 .pp-rowBot{ justify-content: flex-start; }
 
@@ -384,9 +402,7 @@ body {
   box-shadow: 0 14px 26px rgba(37,99,235,0.22);
 }
 
-.pp-send:hover{
-  transform: translateY(-1px);
-}
+.pp-send:hover{ transform: translateY(-1px); }
 
 .pp-send:disabled{
   opacity: 0.55;
@@ -433,7 +449,7 @@ body {
 }
 
 /* ---------- Empty state card ---------- */
-.pp-empty {
+.pp-empty{
   width: 100%;
   padding: 18px;
   border-radius: var(--radius-lg);
@@ -443,13 +459,13 @@ body {
   box-shadow: var(--shadow);
 }
 
-.pp-emptyTop {
+.pp-emptyTop{
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-.pp-emptyIcon {
+.pp-emptyIcon{
   width: 44px;
   height: 44px;
   border-radius: 14px;
@@ -461,26 +477,26 @@ body {
   font-size: 18px;
 }
 
-.pp-emptyTitle {
+.pp-emptyTitle{
   font-size: 16px;
   font-weight: 900;
   margin: 0;
 }
 
-.pp-emptySub {
+.pp-emptySub{
   margin: 2px 0 0;
   font-size: 13px;
   color: var(--subtext);
 }
 
-.pp-chipRow {
+.pp-chipRow{
   margin-top: 14px;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
 
-.pp-chip {
+.pp-chip{
   border: 1px solid var(--border);
   background: #fff;
   padding: 10px 12px;
@@ -492,20 +508,20 @@ body {
   user-select: none;
 }
 
-.pp-chip:hover {
+.pp-chip:hover{
   transform: translateY(-1px);
   box-shadow: 0 12px 18px rgba(15, 23, 42, 0.08);
   background: rgba(37,99,235,0.06);
 }
 
-.pp-chipHint {
+.pp-chipHint{
   margin-top: 10px;
   font-size: 12px;
   color: var(--subtext);
 }
 
 /* ---------- Initial assistant “intro” banner ---------- */
-.pp-intro {
+.pp-intro{
   width: 100%;
   padding: 14px 16px;
   border-radius: var(--radius-lg);
@@ -515,14 +531,14 @@ body {
   color: var(--text);
 }
 
-.pp-introTop {
+.pp-introTop{
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 6px;
 }
 
-.pp-introAvatar {
+.pp-introAvatar{
   width: 28px;
   height: 28px;
   border-radius: 10px;
@@ -533,27 +549,15 @@ body {
   font-size: 14px;
 }
 
-.pp-introName {
+.pp-introName{
   font-weight: 900;
   font-size: 13px;
 }
 
-.pp-introText {
+.pp-introText{
   font-size: 14px;
   color: var(--subtext);
   white-space: pre-wrap;
   margin: 0;
 }
 
-/* LEFT column = rail + panel */
-.pp-left{
-  display: flex;
-  height: 100vh;
-}
-
-/* Panel should fill remaining left width and full height */
-.pp-panel{
-  flex: 1;
-  height: 100%;
-  min-width: 340px; /* keep your desired panel width feel */
-}

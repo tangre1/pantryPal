@@ -1,7 +1,10 @@
+// App.jsx (or App.js)
+
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import "./App.css";
+import { History, BookOpen, User, Carrot, ChevronLeft } from "lucide-react";
 
 const API_BASE = "http://localhost:8000";
 
@@ -11,7 +14,13 @@ const PANELS = {
   USER: "user",
 };
 
-const RailButton = ({ title, active, onClick, onMouseEnter, children }) => (
+const RailButton = ({
+  title,
+  active,
+  onClick,
+  onMouseEnter,
+  children,
+}) => (
   <button
     type="button"
     title={title}
@@ -19,7 +28,10 @@ const RailButton = ({ title, active, onClick, onMouseEnter, children }) => (
     onMouseEnter={onMouseEnter}
     className={`pp-railBtn ${active ? "pp-railBtnActive" : ""}`}
   >
-    {children}
+    {/* Wrap icon so emojis/SVG align consistently */}
+    <span className="pp-railIcon" aria-hidden="true">
+      {children}
+    </span>
   </button>
 );
 
@@ -31,7 +43,12 @@ const PanelShell = ({ title, subtitle, onClose, children }) => (
         <div className="pp-panelSubtitle">{subtitle}</div>
       </div>
 
-      <button type="button" onClick={onClose} className="pp-panelClose" aria-label="Close">
+      <button
+        type="button"
+        onClick={onClose}
+        className="pp-panelClose"
+        aria-label="Close"
+      >
         ✕
       </button>
     </div>
@@ -45,7 +62,11 @@ function App() {
 
   // Stable ids
   const idRef = useRef(2);
-  const nextId = () => idRef.current++;
+  const nextId = () => {
+    const id = idRef.current;
+    idRef.current += 1;
+    return id;
+  };
 
   const [messages, setMessages] = useState([
     {
@@ -82,10 +103,12 @@ function App() {
 
   // Hover-open behavior
   const hoverCloseTimer = useRef(null);
+
   const requestOpenPanel = (name) => {
     if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
     setActivePanel(name);
   };
+
   const requestClosePanelSoon = () => {
     if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
     hoverCloseTimer.current = setTimeout(() => setActivePanel(null), 140);
@@ -131,7 +154,11 @@ function App() {
       console.error(err);
       setMessages((prev) => [
         ...prev,
-        { id: nextId(), role: "assistant", content: "⚠️ I couldn't delete that snapshot. Try again." },
+        {
+          id: nextId(),
+          role: "assistant",
+          content: "⚠️ I couldn't delete that snapshot. Try again.",
+        },
       ]);
     }
   };
@@ -158,7 +185,10 @@ function App() {
     const title = newRecipeTitle.trim();
     if (!title) return alert("Recipe title is required.");
 
-    const tags = newRecipeTags.split(",").map((t) => t.trim()).filter(Boolean);
+    const tags = newRecipeTags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
 
     const ingredients = newRecipeIngredients
       .split("\n")
@@ -166,14 +196,24 @@ function App() {
       .filter(Boolean)
       .map((name) => ({ name }));
 
-    const steps = newRecipeSteps.split("\n").map((line) => line.trim()).filter(Boolean);
+    const steps = newRecipeSteps
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
 
     setCreatingRecipe(true);
     try {
       const res = await fetch(`${API_BASE}/api/recipes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: null, title, tags, ingredients, steps, source: "manual" }),
+        body: JSON.stringify({
+          user_id: null,
+          title,
+          tags,
+          ingredients,
+          steps,
+          source: "manual",
+        }),
       });
 
       if (!res.ok) throw new Error("Failed to create recipe");
@@ -182,6 +222,7 @@ function App() {
       setNewRecipeTags("");
       setNewRecipeIngredients("");
       setNewRecipeSteps("");
+
       await fetchRecipes();
     } catch (err) {
       console.error(err);
@@ -226,10 +267,14 @@ function App() {
     const trimmed = (text || "").trim();
     if (!trimmed || loading) return;
 
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", content: trimmed }]);
+    setMessages((prev) => [
+      ...prev,
+      { id: nextId(), role: "user", content: trimmed },
+    ]);
     setInput("");
     setLoading(true);
 
+    // Use current state messages to build history
     const historyToSend = [
       ...messages.map((m) => ({ role: m.role, content: m.content })),
       { role: "user", content: trimmed },
@@ -244,7 +289,10 @@ function App() {
       if (!res.ok) throw new Error("Request failed");
       const data = await res.json();
 
-      setMessages((prev) => [...prev, { id: nextId(), role: "assistant", content: data.reply }]);
+      setMessages((prev) => [
+        ...prev,
+        { id: nextId(), role: "assistant", content: data.reply },
+      ]);
     } catch (err) {
       console.error(err);
       setMessages((prev) => [
@@ -294,7 +342,9 @@ function App() {
         {
           id: nextId(),
           role: "assistant",
-          content: "I analyzed the image and extracted these items:\n" + JSON.stringify(data.data, null, 2),
+          content:
+            "I analyzed the image and extracted these items:\n" +
+            JSON.stringify(data.data, null, 2),
         },
       ]);
 
@@ -303,7 +353,11 @@ function App() {
       console.error(err);
       setMessages((prev) => [
         ...prev,
-        { id: nextId(), role: "assistant", content: "⚠️ I couldn't process that image. Please try again." },
+        {
+          id: nextId(),
+          role: "assistant",
+          content: "⚠️ I couldn't process that image. Please try again.",
+        },
       ]);
     } finally {
       setUploading(false);
@@ -347,10 +401,29 @@ Keep it concise and practical.
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   const fallbackSuggestions = [
-    { emoji: "🍳", label: "Use What I Have", prompt: "Use what I have at home to suggest 3 dinners, and tell me what's missing." },
-    { emoji: "🥗", label: "Fresh Meal Plan", prompt: "Plan 3 easy dinners for this week and give me one combined grocery list." },
-    { emoji: "💪", label: "High-Protein Ideas", prompt: "Suggest 3 high-protein dinners and give me a grocery list." },
-    { emoji: "🛒", label: "Smart Grocery List", prompt: "Ask me 5 quick questions, then build a grocery list grouped by category." },
+    {
+      emoji: "🍳",
+      label: "Use What I Have",
+      prompt:
+        "Use what I have at home to suggest 3 dinners, and tell me what's missing.",
+    },
+    {
+      emoji: "🥗",
+      label: "Fresh Meal Plan",
+      prompt:
+        "Plan 3 easy dinners for this week and give me one combined grocery list.",
+    },
+    {
+      emoji: "💪",
+      label: "High-Protein Ideas",
+      prompt: "Suggest 3 high-protein dinners and give me a grocery list.",
+    },
+    {
+      emoji: "🛒",
+      label: "Smart Grocery List",
+      prompt:
+        "Ask me 5 quick questions, then build a grocery list grouped by category.",
+    },
   ];
 
   const fetchSuggestions = async () => {
@@ -374,7 +447,10 @@ Keep it concise and practical.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEmpty]);
 
-  const visibleSuggestions = (suggestions.length ? suggestions : fallbackSuggestions).slice(0, 4);
+  const visibleSuggestions = (suggestions.length ? suggestions : fallbackSuggestions).slice(
+    0,
+    4
+  );
 
   return (
     <div className="pp-shell">
@@ -388,24 +464,30 @@ Keep it concise and practical.
       >
         {/* Left rail */}
         <div className="pp-rail">
-          <div className="pp-railBrand">🥕</div>
+          <div className="pp-railBrand">
+            <Carrot size={20} />
+          </div>
 
           <RailButton
             title="Scan history"
             active={activePanel === PANELS.HISTORY}
-            onClick={() => setActivePanel((p) => (p === PANELS.HISTORY ? null : PANELS.HISTORY))}
+            onClick={() =>
+              setActivePanel((p) => (p === PANELS.HISTORY ? null : PANELS.HISTORY))
+            }
             onMouseEnter={() => requestOpenPanel(PANELS.HISTORY)}
           >
-            🕒
+            <History size={20} />
           </RailButton>
 
           <RailButton
             title="Recipes"
             active={activePanel === PANELS.RECIPES}
-            onClick={() => setActivePanel((p) => (p === PANELS.RECIPES ? null : PANELS.RECIPES))}
+            onClick={() =>
+              setActivePanel((p) => (p === PANELS.RECIPES ? null : PANELS.RECIPES))
+            }
             onMouseEnter={() => requestOpenPanel(PANELS.RECIPES)}
           >
-            📖
+            <BookOpen size={20} />
           </RailButton>
 
           <RailButton
@@ -414,23 +496,19 @@ Keep it concise and practical.
             onClick={() => setActivePanel((p) => (p === PANELS.USER ? null : PANELS.USER))}
             onMouseEnter={() => requestOpenPanel(PANELS.USER)}
           >
-            👤
+            <User size={20} />
           </RailButton>
 
           <div style={{ flex: 1 }} />
 
           <RailButton title="Close panel" active={false} onClick={() => setActivePanel(null)}>
-            ⬅️
+            <ChevronLeft size={20} />
           </RailButton>
         </div>
 
-        {/* Expandable panel (fills the rest of the left column) */}
+        {/* Expandable panel */}
         {activePanel === PANELS.HISTORY && (
-          <PanelShell
-            title="Scan History"
-            subtitle="Hover away to hide"
-            onClose={() => setActivePanel(null)}
-          >
+          <PanelShell title="Scan History" subtitle="Hover away to hide" onClose={() => setActivePanel(null)}>
             <button type="button" onClick={fetchSnapshots} className="pp-btn">
               Refresh
             </button>
@@ -450,7 +528,11 @@ Keep it concise and practical.
                 <div className="pp-muted">Items: {snap?.data?.items?.length ?? 0}</div>
 
                 <div style={{ marginTop: 10 }}>
-                  <button type="button" onClick={() => handleUseSnapshot(snap)} className="pp-btn pp-btnPrimary">
+                  <button
+                    type="button"
+                    onClick={() => handleUseSnapshot(snap)}
+                    className="pp-btn pp-btnPrimary"
+                  >
                     Use this scan
                   </button>
 
@@ -530,7 +612,10 @@ Keep it concise and practical.
             </div>
 
             {loadingRecipes && <div className="pp-muted">Loading recipes…</div>}
-            {!loadingRecipes && recipes.length === 0 && <div className="pp-muted">No recipes yet. Create one above.</div>}
+
+            {!loadingRecipes && recipes.length === 0 && (
+              <div className="pp-muted">No recipes yet. Create one above.</div>
+            )}
 
             {recipes.map((r) => (
               <div key={r.id} className="pp-card">
@@ -549,20 +634,24 @@ Keep it concise and practical.
           <PanelShell title="User Profile" subtitle="Hover away to hide" onClose={() => setActivePanel(null)}>
             <div className="pp-muted" style={{ marginBottom: 12 }}>
               For demo purposes this tries to load user id <b>1</b>:
-              <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 12 }}>GET /api/users/1</div>
+              <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 12 }}>
+                GET /api/users/1
+              </div>
             </div>
 
             {loadingUser && <div className="pp-muted">Loading user…</div>}
 
             {!loadingUser && !user && (
               <div className="pp-muted">
-                No user loaded yet. Create one via POST /api/users, or change the fetchUser() function.
+                No user loaded yet. Create one via POST /api/users, or change the fetchUser()
+                function.
               </div>
             )}
 
             {user && (
               <div className="pp-card">
                 <div style={{ fontWeight: 900, fontSize: 16 }}>{user.name}</div>
+
                 <div className="pp-muted" style={{ marginTop: 8, color: "var(--text)" }}>
                   Budget: <b>{user.budget_style}</b>
                 </div>
@@ -607,7 +696,12 @@ Keep it concise and practical.
 
               <label className={`pp-upload ${uploading ? "pp-uploadDisabled" : ""}`}>
                 {uploading ? "Analyzing..." : "Upload image"}
-                <input type="file" accept="image/*" onChange={handleImageChange} style={{ display: "none" }} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  style={{ display: "none" }}
+                />
               </label>
             </div>
           </div>
@@ -619,7 +713,9 @@ Keep it concise and practical.
               <div className="pp-landing">
                 <div className="pp-empty">
                   <div className="pp-emptyTop">
-                    <div className="pp-emptyIcon">🥕</div>
+                    <div className="pp-emptyIcon">
+                      <Carrot size={18} />
+                    </div>
                     <div>
                       <p className="pp-emptyTitle">What are we shopping for?</p>
                       <p className="pp-emptySub">
@@ -648,12 +744,16 @@ Keep it concise and practical.
                     )}
                   </div>
 
-                  <div className="pp-chipHint">Tip: you can also upload a pantry photo to generate meals automatically.</div>
+                  <div className="pp-chipHint">
+                    Tip: you can also upload a pantry photo to generate meals automatically.
+                  </div>
                 </div>
 
                 <div className="pp-intro">
                   <div className="pp-introTop">
-                    <div className="pp-introAvatar">🥕</div>
+                    <div className="pp-introAvatar">
+                      <Carrot size={16} />
+                    </div>
                     <div className="pp-introName">PantryPal</div>
                   </div>
                   <p className="pp-introText">
@@ -665,7 +765,10 @@ Keep it concise and practical.
 
             {!isEmpty &&
               messages.map((m) => (
-                <div key={m.id} className={`pp-row ${m.role === "user" ? "pp-rowUser" : "pp-rowBot"}`}>
+                <div
+                  key={m.id}
+                  className={`pp-row ${m.role === "user" ? "pp-rowUser" : "pp-rowBot"}`}
+                >
                   <div className={`pp-bubble ${m.role === "user" ? "pp-bubbleUser" : "pp-bubbleBot"}`}>
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                   </div>
