@@ -373,11 +373,27 @@ body {
   border: 1px solid rgba(15,23,42,0.08);
 }
 
+/* ---------- Thinking indicator (soft pulse) ---------- */
+@keyframes ppSoftPulse {
+  0% {
+    opacity: 0.25;
+    color: var(--subtext);
+  }
+  50% {
+    opacity: 1;
+    color: var(--text); /* darker at peak */
+  }
+  100% {
+    opacity: 0.25;
+    color: var(--subtext);
+  }
+}
+
 .pp-thinking{
   font-size: 12px;
-  color: var(--subtext);
   margin-top: 6px;
   margin-left: 6px;
+  animation: ppSoftPulse 1.4s ease-in-out infinite;
 }
 
 /* ---------- Composer ---------- */
