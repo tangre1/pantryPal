@@ -61,6 +61,9 @@ function App() {
   // Hover close timer
   const hoverCloseTimer = useRef(null);
 
+  // Welcome modal
+  const [showWelcome, setShowWelcome] = useState(false);
+
   // Stable ids
   const idRef = useRef(2);
   const nextId = () => {
@@ -108,6 +111,27 @@ function App() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
+  // ---------- Welcome modal (show once) ----------
+  useEffect(() => {
+    const seen = localStorage.getItem("pp_welcome_seen");
+    if (!seen) setShowWelcome(true);
+  }, []);
+
+  const handleCloseWelcome = () => {
+    setShowWelcome(false);
+    localStorage.setItem("pp_welcome_seen", "1");
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (!showWelcome) return;
+      if (e.key === "Escape") handleCloseWelcome();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [showWelcome]);
+
   // ---------- Panel open/close behavior (hover preview + click-to-pin + outside click closes) ----------
   const closePanel = () => {
     setActivePanel(null);
@@ -129,19 +153,12 @@ function App() {
 
   const requestOpenPanel = (name) => {
     if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
-
-    // OPTIONAL: if you want pinned to be "locked", uncomment below:
-    // if (panelPinned) return;
-
     setActivePanel(name);
   };
 
   const requestClosePanelSoon = () => {
     if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
-
-    // only auto-close if NOT pinned
     if (panelPinned) return;
-
     hoverCloseTimer.current = setTimeout(() => {
       setActivePanel(null);
     }, 180);
@@ -504,6 +521,129 @@ Keep it concise and practical.
 
   return (
     <div className="pp-shell">
+      {/* Welcome modal */}
+      {showWelcome && (
+        <div
+          className="pp-modalOverlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pp-welcome-title"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) handleCloseWelcome();
+          }}
+        >
+          <div className="pp-modal">
+            <div className="pp-modalHeader">
+              <div className="pp-modalBadge">🥕 PantryPal</div>
+
+              <button
+                type="button"
+                className="pp-modalClose"
+                onClick={handleCloseWelcome}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <h2 id="pp-welcome-title" className="pp-modalTitle">
+              Welcome 👋
+            </h2>
+
+            <p className="pp-modalText">
+              Tell me what you’re shopping for, or upload a pantry/fridge photo and I’ll
+              suggest meals + a grocery list.
+            </p>
+
+            <div className="pp-modalGrid">
+              <button
+                type="button"
+                className="pp-modalCard"
+                onClick={() => {
+                  handleCloseWelcome();
+                  sendTextToChat(
+                    "Use what I have at home to suggest 3 dinners, and tell me what's missing."
+                  );
+                }}
+              >
+                <div className="pp-modalCardIcon">🍳</div>
+                <div>
+                  <div className="pp-modalCardTitle">Use What I Have</div>
+                  <div className="pp-modalCardSub">Get dinners from pantry items</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="pp-modalCard"
+                onClick={() => {
+                  handleCloseWelcome();
+                  sendTextToChat(
+                    "Plan 3 easy dinners for this week and give me one combined grocery list."
+                  );
+                }}
+              >
+                <div className="pp-modalCardIcon">🥗</div>
+                <div>
+                  <div className="pp-modalCardTitle">3-Dinner Plan</div>
+                  <div className="pp-modalCardSub">Simple plan + one list</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="pp-modalCard"
+                onClick={() => {
+                  handleCloseWelcome();
+                  sendTextToChat(
+                    "Ask me 5 quick questions, then build a grocery list grouped by category."
+                  );
+                }}
+              >
+                <div className="pp-modalCardIcon">🛒</div>
+                <div>
+                  <div className="pp-modalCardTitle">Smart Grocery List</div>
+                  <div className="pp-modalCardSub">Fast Q&A → organized list</div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                className="pp-modalCard"
+                onClick={() => {
+                  handleCloseWelcome();
+                  setTimeout(() => inputRef.current?.focus(), 0);
+                }}
+              >
+                <div className="pp-modalCardIcon">💬</div>
+                <div>
+                  <div className="pp-modalCardTitle">Just Ask</div>
+                  <div className="pp-modalCardSub">Type what you want to eat</div>
+                </div>
+              </button>
+            </div>
+
+            <div className="pp-modalActions">
+              <button type="button" className="pp-btn" onClick={handleCloseWelcome}>
+                Not now
+              </button>
+
+              <button
+                type="button"
+                className="pp-btn pp-btnPrimary"
+                onClick={handleCloseWelcome}
+              >
+                Let’s go
+              </button>
+            </div>
+
+            <div className="pp-modalHint">
+              Tip: upload a pantry photo from the top right to auto-detect ingredients.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* LEFT SIDE: rail + panel as one full-height column */}
       <div
         className="pp-left"
