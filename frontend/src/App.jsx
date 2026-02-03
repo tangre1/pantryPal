@@ -1,10 +1,10 @@
-// App.jsx (or App.js)
+// App.jsx
 
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import "./App.css";
-import { History, BookOpen, User, Carrot } from "lucide-react";
+import { History, BookOpen, User, Carrot, UploadCloud } from "lucide-react";
 
 const API_BASE = "http://localhost:8000";
 
@@ -22,7 +22,6 @@ const RailButton = ({ title, active, onClick, onMouseEnter, children }) => (
     onMouseEnter={onMouseEnter}
     className={`pp-railBtn ${active ? "pp-railBtnActive" : ""}`}
   >
-    {/* Wrap icon so emojis/SVG align consistently */}
     <span className="pp-railIcon" aria-hidden="true">
       {children}
     </span>
@@ -111,6 +110,12 @@ function App() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
+  // Upload input ref (so dropzone + button share the same input)
+  const fileInputRef = useRef(null);
+
+  // Drag/drop UI state
+  const [dragOver, setDragOver] = useState(false);
+
   // ---------- Welcome modal (show once) ----------
   useEffect(() => {
     const seen = localStorage.getItem("pp_welcome_seen");
@@ -132,7 +137,7 @@ function App() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [showWelcome]);
 
-  // ---------- Panel open/close behavior (hover preview + click-to-pin + outside click closes) ----------
+  // ---------- Panel open/close behavior ----------
   const closePanel = () => {
     setActivePanel(null);
     setPanelPinned(false);
@@ -140,12 +145,10 @@ function App() {
 
   const togglePanelPinned = (name) => {
     setActivePanel((prev) => {
-      // clicking same icon toggles closed
       if (prev === name) {
         setPanelPinned(false);
         return null;
       }
-      // clicking a different icon opens and pins
       setPanelPinned(true);
       return name;
     });
@@ -333,7 +336,6 @@ function App() {
     const trimmed = (text || "").trim();
     if (!trimmed || loading) return;
 
-    // Add user message immediately
     setMessages((prev) => [
       ...prev,
       { id: nextId(), role: "user", content: trimmed },
@@ -341,7 +343,6 @@ function App() {
     setInput("");
     setLoading(true);
 
-    // Use ref so we don't send stale history
     const historyToSend = [
       ...messagesRef.current.map((m) => ({ role: m.role, content: m.content })),
       { role: "user", content: trimmed },
@@ -382,11 +383,23 @@ function App() {
   };
 
   // -----------------------------
-  // Image upload
+  // Image upload (shared by button + drag/drop)
   // -----------------------------
-  const handleImageChange = async (e) => {
-    const file = e.target.files?.[0];
+  const uploadImageFile = async (file) => {
     if (!file) return;
+
+    // Only accept images (you can loosen this if you want)
+    if (!file.type?.startsWith("image/")) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: nextId(),
+          role: "assistant",
+          content: "⚠️ Please upload an image file (JPG/PNG/HEIC/WebP).",
+        },
+      ]);
+      return;
+    }
 
     setUploading(true);
     setImageResult(null);
@@ -428,8 +441,38 @@ function App() {
       ]);
     } finally {
       setUploading(false);
-      e.target.value = null;
+      // reset the input so selecting the same file again triggers change
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  const handleImageChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadImageFile(file);
+  };
+
+  // Drag/drop handlers for the main chat area
+  const onDragOver = (e) => {
+    e.preventDefault(); // MUST, otherwise drop won't fire
+    if (uploading) return;
+    setDragOver(true);
+  };
+
+  const onDragLeave = (e) => {
+    // Only end drag state when actually leaving the container
+    if (e.currentTarget.contains(e.relatedTarget)) return;
+    setDragOver(false);
+  };
+
+  const onDrop = async (e) => {
+    e.preventDefault(); // MUST, otherwise browser opens the file
+    setDragOver(false);
+    if (uploading) return;
+
+    const file = e.dataTransfer?.files?.[0];
+    if (!file) return;
+    await uploadImageFile(file);
   };
 
   const formatDateTime = (isoString) => {
@@ -895,20 +938,51 @@ Keep it concise and practical.
             <div className="pp-actions">
               <span className="pp-pill">beta</span>
 
-              <label className={`pp-upload ${uploading ? "pp-uploadDisabled" : ""}`}>
+              {/* Hidden input used by both button + drag/drop */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                style={{ display: "none" }}
+              />
+
+              <button
+                type="button"
+                className={`pp-uploadBtn ${uploading ? "pp-uploadDisabled" : ""}`}
+                onClick={() => {
+                  if (uploading) return;
+                  fileInputRef.current?.click();
+                }}
+                aria-label="Upload image"
+              >
+                <UploadCloud size={16} />
                 {uploading ? "Analyzing..." : "Upload image"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  style={{ display: "none" }}
-                />
-              </label>
+              </button>
             </div>
           </div>
         </header>
 
-        <div className="pp-chatWrap">
+        {/* Drop-enabled chat wrap */}
+        <div
+          className={`pp-chatWrap ${dragOver ? "pp-chatWrapDrag" : ""}`}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+        >
+          {/* Drop overlay */}
+          {dragOver && !uploading && (
+            <div className="pp-dropOverlay" aria-hidden="true">
+              <div className="pp-dropCard">
+                <div className="pp-dropIcon">
+                  <UploadCloud size={18} />
+                </div>
+                <div className="pp-dropTitle">Drop to upload</div>
+                <div className="pp-dropSub">Release your pantry/fridge photo</div>
+              </div>
+            </div>
+          )}
+
           <div className="pp-chatColumn">
             {isEmpty && (
               <div className="pp-landing">
@@ -946,7 +1020,7 @@ Keep it concise and practical.
                   </div>
 
                   <div className="pp-chipHint">
-                    Tip: you can also upload a pantry photo to generate meals automatically.
+                    Tip: you can drag & drop a pantry photo anywhere in this chat.
                   </div>
                 </div>
 

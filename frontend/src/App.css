@@ -254,8 +254,8 @@ body {
   font-weight: 700;
 }
 
-/* Upload button */
-.pp-upload{
+/* Upload button (button version so we can trigger ref click) */
+.pp-uploadBtn{
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -269,7 +269,7 @@ body {
   user-select: none;
 }
 
-.pp-upload:hover{
+.pp-uploadBtn:hover{
   transform: translateY(-1px);
   box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
   background: rgba(37,99,235,0.04);
@@ -283,6 +283,7 @@ body {
 
 /* ---------- Chat area ---------- */
 .pp-chatWrap{
+  position: relative; /* for overlay */
   flex: 1;
   overflow: auto;
   padding: 18px 16px;
@@ -290,6 +291,55 @@ body {
     radial-gradient(1200px 600px at 20% 0%, rgba(37,99,235,0.08), transparent 55%),
     radial-gradient(900px 500px at 90% 10%, rgba(99,102,241,0.07), transparent 50%),
     var(--bg);
+}
+
+/* subtle ring when dragging over */
+.pp-chatWrapDrag{
+  outline: 2px dashed rgba(37,99,235,0.45);
+  outline-offset: -6px;
+}
+
+/* Drop overlay that sits on top of chat list */
+.pp-dropOverlay{
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: rgba(246,247,251,0.55);
+  backdrop-filter: blur(6px);
+}
+
+.pp-dropCard{
+  width: min(420px, 88%);
+  border-radius: 20px;
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(37,99,235,0.25);
+  box-shadow: 0 26px 60px rgba(15, 23, 42, 0.18);
+  padding: 18px 16px;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.pp-dropIcon{
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(37,99,235,0.22);
+  background: rgba(37,99,235,0.10);
+}
+
+.pp-dropTitle{
+  font-weight: 950;
+  letter-spacing: 0.2px;
+}
+
+.pp-dropSub{
+  font-size: 12px;
+  color: var(--subtext);
 }
 
 .pp-chatColumn{
@@ -375,18 +425,9 @@ body {
 
 /* ---------- Thinking indicator (soft pulse) ---------- */
 @keyframes ppSoftPulse {
-  0% {
-    opacity: 0.25;
-    color: var(--subtext);
-  }
-  50% {
-    opacity: 1;
-    color: var(--text); /* darker at peak */
-  }
-  100% {
-    opacity: 0.25;
-    color: var(--subtext);
-  }
+  0% { opacity: 0.25; color: var(--subtext); }
+  50% { opacity: 1; color: var(--text); }
+  100% { opacity: 0.25; color: var(--subtext); }
 }
 
 .pp-thinking{
