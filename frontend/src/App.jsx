@@ -54,13 +54,9 @@ function App() {
   const [activePanel, setActivePanel] = useState(null);
   const [panelPinned, setPanelPinned] = useState(false);
 
-  // Ref for detecting outside clicks (rail + panel area)
   const leftRef = useRef(null);
-
-  // Hover close timer
   const hoverCloseTimer = useRef(null);
 
-  // Welcome modal
   const [showWelcome, setShowWelcome] = useState(false);
 
   // Stable ids
@@ -115,6 +111,42 @@ function App() {
 
   // Drag/drop UI state
   const [dragOver, setDragOver] = useState(false);
+
+  // Pending attachment (attach now, upload on Send)
+  const [pendingFile, setPendingFile] = useState(null);
+  const [pendingPreviewUrl, setPendingPreviewUrl] = useState(null);
+
+  const attachFile = (file) => {
+    if (!file) return;
+
+    if (!file.type?.startsWith("image/")) {
+      setMessages((prev) => [
+        ...prev,
+        { id: nextId(), role: "assistant", content: "⚠️ Please attach an image file." },
+      ]);
+      return;
+    }
+
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+
+    setPendingFile(file);
+    setPendingPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const clearAttachment = () => {
+    if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    setPendingFile(null);
+    setPendingPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // Cleanup preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---------- Welcome modal (show once) ----------
   useEffect(() => {
@@ -330,17 +362,12 @@ function App() {
   }, [activePanel]);
 
   // -----------------------------
-  // Chat
+  // Chat (generic)
   // -----------------------------
-  const sendTextToChat = async (text) => {
-    const trimmed = (text || "").trim();
-    if (!trimmed || loading) return;
+  const chatWithAssistant = async (userText) => {
+    const trimmed = (userText || "").trim();
+    if (!trimmed) return;
 
-    setMessages((prev) => [
-      ...prev,
-      { id: nextId(), role: "user", content: trimmed },
-    ]);
-    setInput("");
     setLoading(true);
 
     const historyToSend = [
@@ -377,28 +404,32 @@ function App() {
     }
   };
 
-  const sendMessage = async (e) => {
-    e.preventDefault();
-    await sendTextToChat(input);
+  // Used in other places (welcome chips, snapshot actions) where we DO want to add user bubble normally
+  const sendTextToChat = async (text) => {
+    const trimmed = (text || "").trim();
+    if (!trimmed || loading) return;
+
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", content: trimmed }]);
+    setInput("");
+    await chatWithAssistant(trimmed);
   };
 
   // -----------------------------
-  // Image upload (shared by button + drag/drop)
+  // Image analysis (returns extracted data)
   // -----------------------------
-  const uploadImageFile = async (file) => {
-    if (!file) return;
+  const analyzeImageFile = async (file) => {
+    if (!file) return null;
 
-    // Only accept images (you can loosen this if you want)
     if (!file.type?.startsWith("image/")) {
       setMessages((prev) => [
         ...prev,
         {
           id: nextId(),
           role: "assistant",
-          content: "⚠️ Please upload an image file (JPG/PNG/HEIC/WebP).",
+          content: "⚠️ Please attach an image file (JPG/PNG/HEIC/WebP).",
         },
       ]);
-      return;
+      return null;
     }
 
     setUploading(true);
@@ -415,20 +446,15 @@ function App() {
       if (!res.ok) throw new Error("Image upload failed");
 
       const data = await res.json();
-      setImageResult(data.data);
+      const extracted = data?.data ?? null;
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: nextId(),
-          role: "assistant",
-          content:
-            "I analyzed the image and extracted these items:\n" +
-            JSON.stringify(data.data, null, 2),
-        },
-      ]);
+      // Keep it for UI/preview (optional)
+      setImageResult(extracted);
 
+      // Refresh history since backend likely saved snapshot
       await fetchSnapshots();
+
+      return extracted;
     } catch (err) {
       console.error(err);
       setMessages((prev) => [
@@ -439,40 +465,93 @@ function App() {
           content: "⚠️ I couldn't process that image. Please try again.",
         },
       ]);
+      return null;
     } finally {
       setUploading(false);
-      // reset the input so selecting the same file again triggers change
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
-  const handleImageChange = async (e) => {
+  // File picker ATTACHES (does not analyze immediately)
+  const handleImageChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    await uploadImageFile(file);
+    attachFile(file);
   };
 
-  // Drag/drop handlers for the main chat area
+  // Drag/drop handlers (ATTACH on drop)
   const onDragOver = (e) => {
-    e.preventDefault(); // MUST, otherwise drop won't fire
+    e.preventDefault();
     if (uploading) return;
     setDragOver(true);
   };
 
   const onDragLeave = (e) => {
-    // Only end drag state when actually leaving the container
     if (e.currentTarget.contains(e.relatedTarget)) return;
     setDragOver(false);
   };
 
-  const onDrop = async (e) => {
-    e.preventDefault(); // MUST, otherwise browser opens the file
+  const onDrop = (e) => {
+    e.preventDefault();
     setDragOver(false);
     if (uploading) return;
 
     const file = e.dataTransfer?.files?.[0];
     if (!file) return;
-    await uploadImageFile(file);
+    attachFile(file);
+  };
+
+  // ✅ Correct order: analyze image first, then chat using extracted items + user text
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    if (loading || uploading) return;
+
+    const text = input.trim();
+    const file = pendingFile;
+
+    if (!text && !file) return;
+
+    // Show a single user bubble representing the action
+    const userBubble =
+      (text ? text : "") + (file ? (text ? "\n\n" : "") + "📷 (image attached)" : "");
+
+    setMessages((prev) => [...prev, { id: nextId(), role: "user", content: userBubble }]);
+    setInput("");
+
+    // If no file, just chat normally with the text
+    if (!file) {
+      await chatWithAssistant(text);
+      return;
+    }
+
+    // 1) Analyze first
+    const extracted = await analyzeImageFile(file);
+
+    // Clear attachment after analysis finishes
+    clearAttachment();
+
+    // 2) Build prompt that includes extracted items then the user's request
+    const items = extracted?.items ?? extracted ?? null;
+
+    const prompt = [
+      "I uploaded a pantry/fridge image and you extracted these items (JSON):",
+      "```json",
+      JSON.stringify(items, null, 2),
+      "```",
+      "",
+      text
+        ? `User request: ${text}`
+        : "User request: Suggest 3 dinner ideas that mostly use what I have, and list what to buy.",
+      "",
+      "Please respond with:",
+      "1) 3 meal ideas",
+      "2) For each: Already have vs Need to buy",
+      "3) One combined grocery list grouped by category",
+      "Keep it concise and practical.",
+    ].join("\n");
+
+    // 3) Now chat with the assistant using that prompt
+    await chatWithAssistant(prompt);
   };
 
   const formatDateTime = (isoString) => {
@@ -957,7 +1036,7 @@ Keep it concise and practical.
                 aria-label="Upload image"
               >
                 <UploadCloud size={16} />
-                {uploading ? "Analyzing..." : "Upload image"}
+                {pendingFile ? "Image attached" : "Upload image"}
               </button>
             </div>
           </div>
@@ -977,8 +1056,8 @@ Keep it concise and practical.
                 <div className="pp-dropIcon">
                   <UploadCloud size={18} />
                 </div>
-                <div className="pp-dropTitle">Drop to upload</div>
-                <div className="pp-dropSub">Release your pantry/fridge photo</div>
+                <div className="pp-dropTitle">Drop to attach</div>
+                <div className="pp-dropSub">Then type a message and press Send</div>
               </div>
             </div>
           )}
@@ -1020,7 +1099,7 @@ Keep it concise and practical.
                   </div>
 
                   <div className="pp-chipHint">
-                    Tip: you can drag & drop a pantry photo anywhere in this chat.
+                    Tip: drag & drop a pantry photo to attach it, then press Send.
                   </div>
                 </div>
 
@@ -1056,7 +1135,12 @@ Keep it concise and practical.
                 </div>
               ))}
 
-            {loading && <div className="pp-thinking">PantryPal is thinking…</div>}
+            
+            {(uploading || loading) && (
+              <div className="pp-thinking">
+                {uploading ? "Analyzing image…" : "PantryPal is thinking…"}
+              </div>
+            )}
 
             {imageResult && (
               <pre
@@ -1079,6 +1163,37 @@ Keep it concise and practical.
         </div>
 
         <form onSubmit={sendMessage} className="pp-composer">
+          {/* Attachment preview chip */}
+          {pendingFile && (
+            <div className="pp-attachRow">
+              <div className="pp-attachChip">
+                {pendingPreviewUrl ? (
+                  <img
+                    className="pp-attachThumb"
+                    src={pendingPreviewUrl}
+                    alt="Attachment preview"
+                  />
+                ) : null}
+
+                <div className="pp-attachMeta">
+                  <div className="pp-attachName">{pendingFile.name}</div>
+                  <div className="pp-attachSub">
+                    {(pendingFile.size / 1024 / 1024).toFixed(2)} MB
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="pp-attachRemove"
+                  onClick={clearAttachment}
+                  aria-label="Remove attachment"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="pp-composerInner">
             <input
               ref={inputRef}
@@ -1091,10 +1206,10 @@ Keep it concise and practical.
 
             <button
               type="submit"
-              disabled={loading || !input.trim()}
+              disabled={loading || uploading || (!input.trim() && !pendingFile)}
               className="pp-send"
             >
-              {loading ? "Sending…" : "Send"}
+              {uploading ? "Analyzing…" : loading ? "Sending…" : "Send"}
             </button>
           </div>
         </form>
