@@ -1142,22 +1142,6 @@ Keep it concise and practical.
               </div>
             )}
 
-            {imageResult && (
-              <pre
-                style={{
-                  marginTop: 14,
-                  padding: 12,
-                  background: "#0b1220",
-                  color: "#e5e7eb",
-                  borderRadius: 12,
-                  fontSize: 12,
-                  overflowX: "auto",
-                }}
-              >
-                {JSON.stringify(imageResult, null, 2)}
-              </pre>
-            )}
-
             <div ref={messagesEndRef} />
           </div>
         </div>
