@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import "./App.css";
-import { History, BookOpen, User, Carrot, ChevronLeft } from "lucide-react";
+import { History, BookOpen, User, Carrot } from "lucide-react";
 
 const API_BASE = "http://localhost:8000";
 
@@ -14,13 +14,7 @@ const PANELS = {
   USER: "user",
 };
 
-const RailButton = ({
-  title,
-  active,
-  onClick,
-  onMouseEnter,
-  children,
-}) => (
+const RailButton = ({ title, active, onClick, onMouseEnter, children }) => (
   <button
     type="button"
     title={title}
@@ -59,6 +53,13 @@ const PanelShell = ({ title, subtitle, onClose, children }) => (
 
 function App() {
   const [activePanel, setActivePanel] = useState(null);
+  const [panelPinned, setPanelPinned] = useState(false);
+
+  // Ref for detecting outside clicks (rail + panel area)
+  const leftRef = useRef(null);
+
+  // Hover close timer
+  const hoverCloseTimer = useRef(null);
 
   // Stable ids
   const idRef = useRef(2);
@@ -76,6 +77,12 @@ function App() {
         "Hi, I’m PantryPal 🥕\nTell me what you’re shopping for and I’ll help with lists and meal ideas.",
     },
   ]);
+
+  // Keep latest messages in a ref so chat history isn't stale inside async handlers
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -101,18 +108,60 @@ function App() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Hover-open behavior
-  const hoverCloseTimer = useRef(null);
+  // ---------- Panel open/close behavior (hover preview + click-to-pin + outside click closes) ----------
+  const closePanel = () => {
+    setActivePanel(null);
+    setPanelPinned(false);
+  };
+
+  const togglePanelPinned = (name) => {
+    setActivePanel((prev) => {
+      // clicking same icon toggles closed
+      if (prev === name) {
+        setPanelPinned(false);
+        return null;
+      }
+      // clicking a different icon opens and pins
+      setPanelPinned(true);
+      return name;
+    });
+  };
 
   const requestOpenPanel = (name) => {
     if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
+
+    // OPTIONAL: if you want pinned to be "locked", uncomment below:
+    // if (panelPinned) return;
+
     setActivePanel(name);
   };
 
   const requestClosePanelSoon = () => {
     if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
-    hoverCloseTimer.current = setTimeout(() => setActivePanel(null), 140);
+
+    // only auto-close if NOT pinned
+    if (panelPinned) return;
+
+    hoverCloseTimer.current = setTimeout(() => {
+      setActivePanel(null);
+    }, 180);
   };
+
+  // Click outside the left rail+panel closes it (even if pinned)
+  useEffect(() => {
+    const onMouseDown = (e) => {
+      if (!activePanel) return;
+      const leftEl = leftRef.current;
+      if (!leftEl) return;
+
+      if (!leftEl.contains(e.target)) {
+        closePanel();
+      }
+    };
+
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [activePanel]);
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -267,6 +316,7 @@ function App() {
     const trimmed = (text || "").trim();
     if (!trimmed || loading) return;
 
+    // Add user message immediately
     setMessages((prev) => [
       ...prev,
       { id: nextId(), role: "user", content: trimmed },
@@ -274,9 +324,9 @@ function App() {
     setInput("");
     setLoading(true);
 
-    // Use current state messages to build history
+    // Use ref so we don't send stale history
     const historyToSend = [
-      ...messages.map((m) => ({ role: m.role, content: m.content })),
+      ...messagesRef.current.map((m) => ({ role: m.role, content: m.content })),
       { role: "user", content: trimmed },
     ];
 
@@ -457,6 +507,7 @@ Keep it concise and practical.
       {/* LEFT SIDE: rail + panel as one full-height column */}
       <div
         className="pp-left"
+        ref={leftRef}
         onMouseEnter={() => {
           if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
         }}
@@ -468,13 +519,10 @@ Keep it concise and practical.
             🥕
           </div>
 
-
           <RailButton
             title="Scan history"
             active={activePanel === PANELS.HISTORY}
-            onClick={() =>
-              setActivePanel((p) => (p === PANELS.HISTORY ? null : PANELS.HISTORY))
-            }
+            onClick={() => togglePanelPinned(PANELS.HISTORY)}
             onMouseEnter={() => requestOpenPanel(PANELS.HISTORY)}
           >
             <History size={20} />
@@ -483,9 +531,7 @@ Keep it concise and practical.
           <RailButton
             title="Recipes"
             active={activePanel === PANELS.RECIPES}
-            onClick={() =>
-              setActivePanel((p) => (p === PANELS.RECIPES ? null : PANELS.RECIPES))
-            }
+            onClick={() => togglePanelPinned(PANELS.RECIPES)}
             onMouseEnter={() => requestOpenPanel(PANELS.RECIPES)}
           >
             <BookOpen size={20} />
@@ -494,7 +540,7 @@ Keep it concise and practical.
           <RailButton
             title="User profile"
             active={activePanel === PANELS.USER}
-            onClick={() => setActivePanel((p) => (p === PANELS.USER ? null : PANELS.USER))}
+            onClick={() => togglePanelPinned(PANELS.USER)}
             onMouseEnter={() => requestOpenPanel(PANELS.USER)}
           >
             <User size={20} />
@@ -505,7 +551,11 @@ Keep it concise and practical.
 
         {/* Expandable panel */}
         {activePanel === PANELS.HISTORY && (
-          <PanelShell title="Scan History" subtitle="Hover away to hide" onClose={() => setActivePanel(null)}>
+          <PanelShell
+            title="Scan History"
+            subtitle={panelPinned ? "Pinned • Click outside to hide" : "Hover away to hide"}
+            onClose={closePanel}
+          >
             <button type="button" onClick={fetchSnapshots} className="pp-btn">
               Refresh
             </button>
@@ -535,7 +585,11 @@ Keep it concise and practical.
 
                   <div style={{ height: 8 }} />
 
-                  <button type="button" onClick={() => deleteSnapshot(snap.id)} className="pp-btn">
+                  <button
+                    type="button"
+                    onClick={() => deleteSnapshot(snap.id)}
+                    className="pp-btn"
+                  >
                     Delete
                   </button>
                 </div>
@@ -545,7 +599,11 @@ Keep it concise and practical.
         )}
 
         {activePanel === PANELS.RECIPES && (
-          <PanelShell title="Recipes" subtitle="Hover away to hide" onClose={() => setActivePanel(null)}>
+          <PanelShell
+            title="Recipes"
+            subtitle={panelPinned ? "Pinned • Click outside to hide" : "Hover away to hide"}
+            onClose={closePanel}
+          >
             <button type="button" onClick={fetchRecipes} className="pp-btn">
               Refresh
             </button>
@@ -617,7 +675,9 @@ Keep it concise and practical.
             {recipes.map((r) => (
               <div key={r.id} className="pp-card">
                 <div className="pp-cardTitle">{r.title}</div>
-                <div className="pp-muted">{Array.isArray(r.tags) ? r.tags.join(", ") : ""}</div>
+                <div className="pp-muted">
+                  {Array.isArray(r.tags) ? r.tags.join(", ") : ""}
+                </div>
                 <div className="pp-muted">
                   Ingredients: {Array.isArray(r.ingredients) ? r.ingredients.length : 0} • Steps:{" "}
                   {Array.isArray(r.steps) ? r.steps.length : 0}
@@ -628,7 +688,11 @@ Keep it concise and practical.
         )}
 
         {activePanel === PANELS.USER && (
-          <PanelShell title="User Profile" subtitle="Hover away to hide" onClose={() => setActivePanel(null)}>
+          <PanelShell
+            title="User Profile"
+            subtitle={panelPinned ? "Pinned • Click outside to hide" : "Hover away to hide"}
+            onClose={closePanel}
+          >
             <div className="pp-muted" style={{ marginBottom: 12 }}>
               For demo purposes this tries to load user id <b>1</b>:
               <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 12 }}>
@@ -766,8 +830,14 @@ Keep it concise and practical.
                   key={m.id}
                   className={`pp-row ${m.role === "user" ? "pp-rowUser" : "pp-rowBot"}`}
                 >
-                  <div className={`pp-bubble ${m.role === "user" ? "pp-bubbleUser" : "pp-bubbleBot"}`}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                  <div
+                    className={`pp-bubble ${
+                      m.role === "user" ? "pp-bubbleUser" : "pp-bubbleBot"
+                    }`}
+                  >
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {m.content}
+                    </ReactMarkdown>
                   </div>
                 </div>
               ))}
@@ -805,7 +875,11 @@ Keep it concise and practical.
               className="pp-input"
             />
 
-            <button type="submit" disabled={loading || !input.trim()} className="pp-send">
+            <button
+              type="submit"
+              disabled={loading || !input.trim()}
+              className="pp-send"
+            >
               {loading ? "Sending…" : "Send"}
             </button>
           </div>

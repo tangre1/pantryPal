@@ -86,6 +86,28 @@ body {
   font-size: 18px;
 }
 
+/* ===== Rail button base ===== */
+.pp-railBtn{
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: #fff;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease, border-color 120ms ease;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.pp-railBtn:focus-visible{
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(37,99,235,0.18);
+  border-color: rgba(37,99,235,0.40);
+}
+
 .pp-railBtn:hover{
   transform: translateY(-1px);
   border-color: rgba(37,99,235,0.25);
@@ -99,30 +121,22 @@ body {
   box-shadow: 0 16px 30px rgba(37,99,235,0.14);
 }
 
-/* ===== Rail icon centering + sizing (FIX) ===== */
-.pp-railBtn{
-  display: flex;              /* instead of grid */
-  align-items: center;
-  justify-content: center;
-  padding: 0;                 /* kill any baseline padding issues */
-}
-
-/* wrapper around the icon (we added <span class="pp-railIcon"> ) */
+/* wrapper around the icon */
 .pp-railIcon{
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  line-height: 0;             /* IMPORTANT: prevents baseline offset */
+  width: 24px;
+  height: 24px;
+  line-height: 0; /* prevents baseline offset */
 }
 
 /* make lucide icons consistent */
 .pp-railIcon svg{
-  width: 22px;
-  height: 22px;
-  stroke-width: 2.25;         /* bolder so they look “right” */
-  display: block;             /* removes inline svg whitespace */
+  width: 24px;
+  height: 24px;
+  stroke-width: 2.25;
+  display: block;
   color: rgba(15, 23, 42, 0.70);
 }
 
@@ -131,14 +145,7 @@ body {
   color: var(--brand);
 }
 
-.pp-railIcon,
-.pp-railIcon svg{
-  width: 24px;
-  height: 24px;
-}
-
 /* ---------- Panel ---------- */
-/* MERGED: this replaces your duplicate .pp-panel blocks */
 .pp-panel{
   width: 340px;
   min-width: 340px;
@@ -271,6 +278,7 @@ body {
 .pp-uploadDisabled{
   opacity: 0.6;
   cursor: default;
+  pointer-events: none; /* truly disable */
 }
 
 /* ---------- Chat area ---------- */
@@ -574,4 +582,3 @@ body {
   white-space: pre-wrap;
   margin: 0;
 }
-
