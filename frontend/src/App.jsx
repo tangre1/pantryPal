@@ -4,6 +4,8 @@ import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import "./App.css";
+import AuthGate from "./AuthGate.jsx";
+import Register from "./Register.jsx";
 import { History, BookOpen, User, Carrot, UploadCloud } from "lucide-react";
 
 const API_BASE = "http://localhost:8000";
@@ -13,6 +15,20 @@ const PANELS = {
   RECIPES: "recipes",
   USER: "user",
 };
+
+// -----------------------------
+// Demo Auth (localStorage)
+// -----------------------------
+const STORAGE_KEY = "pp_user";
+
+function readSavedUser() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 const RailButton = ({ title, active, onClick, onMouseEnter, children }) => (
   <button
@@ -50,7 +66,42 @@ const PanelShell = ({ title, subtitle, onClose, children }) => (
   </div>
 );
 
-function App() {
+// ✅ App only manages auth/session (stable hook order)
+export default function App() {
+  const [sessionUser, setSessionUser] = useState(() => readSavedUser());
+  const [authMode, setAuthMode] = useState("signin"); // "signin" | "register"
+
+  const handleAuthed = (user) => {
+    // Persist immediately so refresh isn't required
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
+    } catch {}
+    setSessionUser(user);
+  };
+
+  const signOut = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+    setSessionUser(null);
+    setAuthMode("signin");
+  };
+
+  // ✅ Keep returns after hooks + handlers are defined
+  return sessionUser ? (
+    <PantryPalApp sessionUser={sessionUser} signOut={signOut} />
+  ) : authMode === "register" ? (
+    <Register onAuthed={handleAuthed} onGoToSignIn={() => setAuthMode("signin")} />
+  ) : (
+    <AuthGate onAuthed={handleAuthed} onCreateAccount={() => setAuthMode("register")} />
+  );
+}
+
+// ✅ Everything else moved into a child component so hooks are consistent
+function PantryPalApp({ sessionUser, signOut }) {
+  // -----------------------------
+  // PantryPal UI State
+  // -----------------------------
   const [activePanel, setActivePanel] = useState(null);
   const [panelPinned, setPanelPinned] = useState(false);
 
@@ -85,6 +136,7 @@ function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // keep extracted result internally (not rendered)
   const [imageResult, setImageResult] = useState(null);
   const [uploading, setUploading] = useState(false);
 
@@ -122,7 +174,11 @@ function App() {
     if (!file.type?.startsWith("image/")) {
       setMessages((prev) => [
         ...prev,
-        { id: nextId(), role: "assistant", content: "⚠️ Please attach an image file." },
+        {
+          id: nextId(),
+          role: "assistant",
+          content: "⚠️ Please attach an image file.",
+        },
       ]);
       return;
     }
@@ -404,12 +460,15 @@ function App() {
     }
   };
 
-  // Used in other places (welcome chips, snapshot actions) where we DO want to add user bubble normally
+  // Used in other places (welcome chips, snapshot actions)
   const sendTextToChat = async (text) => {
     const trimmed = (text || "").trim();
     if (!trimmed || loading) return;
 
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", content: trimmed }]);
+    setMessages((prev) => [
+      ...prev,
+      { id: nextId(), role: "user", content: trimmed },
+    ]);
     setInput("");
     await chatWithAssistant(trimmed);
   };
@@ -448,10 +507,7 @@ function App() {
       const data = await res.json();
       const extracted = data?.data ?? null;
 
-      // Keep it for UI/preview (optional)
       setImageResult(extracted);
-
-      // Refresh history since backend likely saved snapshot
       await fetchSnapshots();
 
       return extracted;
@@ -513,9 +569,13 @@ function App() {
 
     // Show a single user bubble representing the action
     const userBubble =
-      (text ? text : "") + (file ? (text ? "\n\n" : "") + "📷 (image attached)" : "");
+      (text ? text : "") +
+      (file ? (text ? "\n\n" : "") + "📷 (image attached)" : "");
 
-    setMessages((prev) => [...prev, { id: nextId(), role: "user", content: userBubble }]);
+    setMessages((prev) => [
+      ...prev,
+      { id: nextId(), role: "user", content: userBubble },
+    ]);
     setInput("");
 
     // If no file, just chat normally with the text
@@ -530,7 +590,7 @@ function App() {
     // Clear attachment after analysis finishes
     clearAttachment();
 
-    // 2) Build prompt that includes extracted items then the user's request
+    // 2) Build prompt with extracted items
     const items = extracted?.items ?? extracted ?? null;
 
     const prompt = [
@@ -550,7 +610,7 @@ function App() {
       "Keep it concise and practical.",
     ].join("\n");
 
-    // 3) Now chat with the assistant using that prompt
+    // 3) Now chat
     await chatWithAssistant(prompt);
   };
 
@@ -592,26 +652,26 @@ Keep it concise and practical.
   const fallbackSuggestions = [
     {
       emoji: "🍳",
-      label: "Use What I Have",
+      label: "Weekly Grocery List",
       prompt:
-        "Use what I have at home to suggest 3 dinners, and tell me what's missing.",
+        "Build me a weekly grocery list with a few meal ideas, grouped by category.",
     },
     {
-      emoji: "🥗",
-      label: "Fresh Meal Plan",
+      emoji: "🍽️",
+      label: "Quick Meal Plan",
       prompt:
-        "Plan 3 easy dinners for this week and give me one combined grocery list.",
+        "Plan 3 quick dinners for this week and give me one combined grocery list.",
+    },
+    {
+      emoji: "💸",
+      label: "Save on Groceries",
+      prompt:
+        "Help me save money on groceries this week—suggest a budget meal plan and list.",
     },
     {
       emoji: "💪",
       label: "High-Protein Ideas",
       prompt: "Suggest 3 high-protein dinners and give me a grocery list.",
-    },
-    {
-      emoji: "🛒",
-      label: "Smart Grocery List",
-      prompt:
-        "Ask me 5 quick questions, then build a grocery list grouped by category.",
     },
   ];
 
@@ -636,10 +696,9 @@ Keep it concise and practical.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEmpty]);
 
-  const visibleSuggestions = (suggestions.length ? suggestions : fallbackSuggestions).slice(
-    0,
-    4
-  );
+  const visibleSuggestions = (
+    suggestions.length ? suggestions : fallbackSuggestions
+  ).slice(0, 4);
 
   return (
     <div className="pp-shell">
@@ -673,8 +732,8 @@ Keep it concise and practical.
             </h2>
 
             <p className="pp-modalText">
-              Tell me what you’re shopping for, or upload a pantry/fridge photo and I’ll
-              suggest meals + a grocery list.
+              Tell me what you’re shopping for, or attach a pantry/fridge photo
+              and I’ll suggest meals + a grocery list.
             </p>
 
             <div className="pp-modalGrid">
@@ -691,7 +750,9 @@ Keep it concise and practical.
                 <div className="pp-modalCardIcon">🍳</div>
                 <div>
                   <div className="pp-modalCardTitle">Use What I Have</div>
-                  <div className="pp-modalCardSub">Get dinners from pantry items</div>
+                  <div className="pp-modalCardSub">
+                    Get dinners from pantry items
+                  </div>
                 </div>
               </button>
 
@@ -746,7 +807,11 @@ Keep it concise and practical.
             </div>
 
             <div className="pp-modalActions">
-              <button type="button" className="pp-btn" onClick={handleCloseWelcome}>
+              <button
+                type="button"
+                className="pp-btn"
+                onClick={handleCloseWelcome}
+              >
                 Not now
               </button>
 
@@ -760,7 +825,7 @@ Keep it concise and practical.
             </div>
 
             <div className="pp-modalHint">
-              Tip: upload a pantry photo from the top right to auto-detect ingredients.
+              Tip: attach a pantry photo from the top right, then press Send.
             </div>
           </div>
         </div>
@@ -815,7 +880,11 @@ Keep it concise and practical.
         {activePanel === PANELS.HISTORY && (
           <PanelShell
             title="Scan History"
-            subtitle={panelPinned ? "Pinned • Click outside to hide" : "Hover away to hide"}
+            subtitle={
+              panelPinned
+                ? "Pinned • Click outside to hide"
+                : "Hover away to hide"
+            }
             onClose={closePanel}
           >
             <button type="button" onClick={fetchSnapshots} className="pp-btn">
@@ -825,7 +894,9 @@ Keep it concise and practical.
             {loadingSnapshots && <div className="pp-muted">Loading scans…</div>}
 
             {!loadingSnapshots && snapshots.length === 0 && (
-              <div className="pp-muted">No scans yet. Upload an image to create one.</div>
+              <div className="pp-muted">
+                No scans yet. Upload an image to create one.
+              </div>
             )}
 
             {snapshots.map((snap) => (
@@ -834,7 +905,9 @@ Keep it concise and practical.
                   {snap.label || `Snapshot #${snap.id}`}
                 </div>
                 <div className="pp-muted">{formatDateTime(snap.created_at)}</div>
-                <div className="pp-muted">Items: {snap?.data?.items?.length ?? 0}</div>
+                <div className="pp-muted">
+                  Items: {snap?.data?.items?.length ?? 0}
+                </div>
 
                 <div style={{ marginTop: 10 }}>
                   <button
@@ -863,7 +936,11 @@ Keep it concise and practical.
         {activePanel === PANELS.RECIPES && (
           <PanelShell
             title="Recipes"
-            subtitle={panelPinned ? "Pinned • Click outside to hide" : "Hover away to hide"}
+            subtitle={
+              panelPinned
+                ? "Pinned • Click outside to hide"
+                : "Hover away to hide"
+            }
             onClose={closePanel}
           >
             <button type="button" onClick={fetchRecipes} className="pp-btn">
@@ -898,7 +975,9 @@ Keep it concise and practical.
               <textarea
                 value={newRecipeIngredients}
                 onChange={(e) => setNewRecipeIngredients(e.target.value)}
-                placeholder={"Ingredients (one per line)\nExample:\nChicken\nRice\nBroccoli"}
+                placeholder={
+                  "Ingredients (one per line)\nExample:\nChicken\nRice\nBroccoli"
+                }
                 rows={4}
                 className="pp-input"
                 style={{ borderRadius: 12, resize: "vertical" }}
@@ -909,7 +988,9 @@ Keep it concise and practical.
               <textarea
                 value={newRecipeSteps}
                 onChange={(e) => setNewRecipeSteps(e.target.value)}
-                placeholder={"Steps (one per line)\nExample:\nCook chicken\nCook rice\nServe together"}
+                placeholder={
+                  "Steps (one per line)\nExample:\nCook chicken\nCook rice\nServe together"
+                }
                 rows={4}
                 className="pp-input"
                 style={{ borderRadius: 12, resize: "vertical" }}
@@ -941,8 +1022,9 @@ Keep it concise and practical.
                   {Array.isArray(r.tags) ? r.tags.join(", ") : ""}
                 </div>
                 <div className="pp-muted">
-                  Ingredients: {Array.isArray(r.ingredients) ? r.ingredients.length : 0} • Steps:{" "}
-                  {Array.isArray(r.steps) ? r.steps.length : 0}
+                  Ingredients:{" "}
+                  {Array.isArray(r.ingredients) ? r.ingredients.length : 0} •
+                  Steps: {Array.isArray(r.steps) ? r.steps.length : 0}
                 </div>
               </div>
             ))}
@@ -952,12 +1034,22 @@ Keep it concise and practical.
         {activePanel === PANELS.USER && (
           <PanelShell
             title="User Profile"
-            subtitle={panelPinned ? "Pinned • Click outside to hide" : "Hover away to hide"}
+            subtitle={
+              panelPinned
+                ? "Pinned • Click outside to hide"
+                : "Hover away to hide"
+            }
             onClose={closePanel}
           >
             <div className="pp-muted" style={{ marginBottom: 12 }}>
               For demo purposes this tries to load user id <b>1</b>:
-              <div style={{ marginTop: 6, fontFamily: "monospace", fontSize: 12 }}>
+              <div
+                style={{
+                  marginTop: 6,
+                  fontFamily: "monospace",
+                  fontSize: 12,
+                }}
+              >
                 GET /api/users/1
               </div>
             </div>
@@ -966,8 +1058,8 @@ Keep it concise and practical.
 
             {!loadingUser && !user && (
               <div className="pp-muted">
-                No user loaded yet. Create one via POST /api/users, or change the fetchUser()
-                function.
+                No user loaded yet. Create one via POST /api/users, or change
+                the fetchUser() function.
               </div>
             )}
 
@@ -975,7 +1067,10 @@ Keep it concise and practical.
               <div className="pp-card">
                 <div style={{ fontWeight: 900, fontSize: 16 }}>{user.name}</div>
 
-                <div className="pp-muted" style={{ marginTop: 8, color: "var(--text)" }}>
+                <div
+                  className="pp-muted"
+                  style={{ marginTop: 8, color: "var(--text)" }}
+                >
                   Budget: <b>{user.budget_style}</b>
                 </div>
                 <div className="pp-muted" style={{ color: "var(--text)" }}>
@@ -1017,7 +1112,20 @@ Keep it concise and practical.
             <div className="pp-actions">
               <span className="pp-pill">beta</span>
 
-              {/* Hidden input used by both button + drag/drop */}
+              <span className="pp-muted" style={{ marginRight: 6 }}>
+                Hi, <b style={{ color: "var(--text)" }}>{sessionUser?.name}</b>
+              </span>
+
+              <button
+                type="button"
+                className="pp-btn"
+                style={{ width: "auto" }}
+                onClick={signOut}
+              >
+                Sign out
+              </button>
+
+              {/* Hidden input used by button */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1028,7 +1136,9 @@ Keep it concise and practical.
 
               <button
                 type="button"
-                className={`pp-uploadBtn ${uploading ? "pp-uploadDisabled" : ""}`}
+                className={`pp-uploadBtn ${
+                  uploading ? "pp-uploadDisabled" : ""
+                }`}
                 onClick={() => {
                   if (uploading) return;
                   fileInputRef.current?.click();
@@ -1057,7 +1167,9 @@ Keep it concise and practical.
                   <UploadCloud size={18} />
                 </div>
                 <div className="pp-dropTitle">Drop to attach</div>
-                <div className="pp-dropSub">Then type a message and press Send</div>
+                <div className="pp-dropSub">
+                  Then type a message and press Send
+                </div>
               </div>
             </div>
           )}
@@ -1073,7 +1185,8 @@ Keep it concise and practical.
                     <div>
                       <p className="pp-emptyTitle">What are we shopping for?</p>
                       <p className="pp-emptySub">
-                        Start with a goal — dinner ideas, a grocery list, or “use what I have.”
+                        Start with a goal — dinner ideas, a grocery list, or
+                        “use what I have.”
                       </p>
                     </div>
                   </div>
@@ -1099,7 +1212,8 @@ Keep it concise and practical.
                   </div>
 
                   <div className="pp-chipHint">
-                    Tip: drag & drop a pantry photo to attach it, then press Send.
+                    Tip: drag & drop a pantry photo to attach it, then press
+                    Send.
                   </div>
                 </div>
 
@@ -1111,7 +1225,8 @@ Keep it concise and practical.
                     <div className="pp-introName">PantryPal</div>
                   </div>
                   <p className="pp-introText">
-                    Tell me what you’re shopping for and I’ll help with lists and meal ideas.
+                    Tell me what you’re shopping for and I’ll help with lists
+                    and meal ideas.
                   </p>
                 </div>
               </div>
@@ -1121,7 +1236,9 @@ Keep it concise and practical.
               messages.map((m) => (
                 <div
                   key={m.id}
-                  className={`pp-row ${m.role === "user" ? "pp-rowUser" : "pp-rowBot"}`}
+                  className={`pp-row ${
+                    m.role === "user" ? "pp-rowUser" : "pp-rowBot"
+                  }`}
                 >
                   <div
                     className={`pp-bubble ${
@@ -1135,7 +1252,6 @@ Keep it concise and practical.
                 </div>
               ))}
 
-            
             {(uploading || loading) && (
               <div className="pp-thinking">
                 {uploading ? "Analyzing image…" : "PantryPal is thinking…"}
@@ -1201,5 +1317,3 @@ Keep it concise and practical.
     </div>
   );
 }
-
-export default App;

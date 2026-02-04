@@ -837,3 +837,61 @@ body {
   padding: 8px 10px;
   cursor: pointer;
 }
+
+.pp-authBtnSecondary{
+  padding: 10px 12px;
+  font-size: 13px;
+  background: #fff;
+}
+
+/* ---------- Auth (Sign in / Register) ---------- */
+.pp-authShell{
+  align-items: center;
+  justify-content: center;
+}
+
+.pp-authCard{
+  width: min(420px, 92vw);   /* smaller than before */
+  padding: 16px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.pp-authTitle{
+  font-weight: 950;
+  font-size: 16px;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.pp-authForm{
+  margin-top: 10px;
+}
+
+.pp-authInput{
+  width: 100%;
+}
+
+.pp-authFooter{
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.pp-linkBtn{
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--brand);
+  font-weight: 800;
+  padding: 6px 8px;
+  border-radius: 10px;
+}
+
+.pp-linkBtn:hover{
+  background: rgba(37,99,235,0.08);
+}
