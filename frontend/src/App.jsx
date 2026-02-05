@@ -8,7 +8,7 @@ import AuthGate from "./AuthGate.jsx";
 import Register from "./Register.jsx";
 import { History, BookOpen, User, Carrot, UploadCloud } from "lucide-react";
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
 const PANELS = {
   HISTORY: "history",

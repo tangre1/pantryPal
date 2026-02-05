@@ -29,6 +29,8 @@ AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION")
 
+
+"""
 if not AZURE_OPENAI_API_KEY:
     raise RuntimeError("AZURE_OPENAI_API_KEY is not set. Check your .env file.")
 if not AZURE_OPENAI_ENDPOINT:
@@ -37,6 +39,8 @@ if not AZURE_OPENAI_DEPLOYMENT:
     raise RuntimeError("AZURE_OPENAI_DEPLOYMENT is not set. Check your .env file.")
 if not AZURE_OPENAI_API_VERSION:
     raise RuntimeError("AZURE_OPENAI_API_VERSION is not set. Check your .env file.")
+"""
+
 
 # --------------------------
 # Azure OpenAI client
@@ -56,17 +60,21 @@ app = FastAPI(
     version="0.5.0",
 )
 
-# CORS for local React dev
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",  # Vite
-        "http://localhost:3000",  # CRA
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://tangre1.github.io",
+    "https://tangre1.github.io/pantryPal",
     ],
+
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
 
 # Create DB tables on startup
 @app.on_event("startup")
