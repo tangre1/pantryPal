@@ -492,7 +492,30 @@ Prefer using what is available.
         except json.JSONDecodeError:
             parsed = {"recipes": []}
 
-        return parsed
+        # Ensure parsed structure is valid
+        recipes = parsed.get("recipes", [])
+        if not isinstance(recipes, list):
+            recipes = []
+
+        # ✅ NEW: save generated recipes when requested
+        if body.save:
+            for recipe_data in recipes:
+                if not isinstance(recipe_data, dict):
+                    continue
+
+                recipe = Recipe(
+                    user_id=None,  # update later if you want to attach this to a signed-in user
+                    title=str(recipe_data.get("title", "Untitled Recipe")).strip() or "Untitled Recipe",
+                    tags=",".join(recipe_data.get("tags", [])) if isinstance(recipe_data.get("tags", []), list) else "",
+                    ingredients_json=json.dumps(recipe_data.get("ingredients", [])),
+                    steps_json=json.dumps(recipe_data.get("steps", [])),
+                    source="ai",
+                )
+                session.add(recipe)
+
+            session.commit()
+
+        return {"recipes": recipes}
 
     except Exception as e:
         print("generate-recipes error:", e)
