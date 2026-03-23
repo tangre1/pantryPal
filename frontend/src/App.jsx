@@ -146,6 +146,7 @@ function PantryPalApp({ sessionUser, signOut }) {
   const [recipes, setRecipes] = useState([]);
   const [loadingRecipes, setLoadingRecipes] = useState(false);
 
+  const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [newRecipeTitle, setNewRecipeTitle] = useState("");
   const [newRecipeTags, setNewRecipeTags] = useState("");
   const [newRecipeIngredients, setNewRecipeIngredients] = useState("");
@@ -323,71 +324,83 @@ function PantryPalApp({ sessionUser, signOut }) {
   // -----------------------------
   // API: recipes
   // -----------------------------
-  const fetchRecipes = async () => {
-    setLoadingRecipes(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/recipes`);
-      if (!res.ok) throw new Error("Failed to fetch recipes");
-      const data = await res.json();
-      setRecipes(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Recipes fetch failed:", err);
-      setRecipes([]);
-    } finally {
-      setLoadingRecipes(false);
-    }
-  };
+const fetchRecipes = async () => {
+  setLoadingRecipes(true);
+  try {
+    const res = await fetch(`${API_BASE}/api/recipes`);
+    if (!res.ok) throw new Error("Failed to fetch recipes");
+    const data = await res.json();
+    const recipeList = Array.isArray(data) ? data : [];
+
+    setRecipes(recipeList);
+
+    // Keep selected recipe in sync after refresh
+    setSelectedRecipe((prev) => {
+      if (!recipeList.length) return null;
+      if (!prev) return recipeList[0];
+
+      const updatedMatch = recipeList.find((recipe) => recipe.id === prev.id);
+      return updatedMatch || recipeList[0];
+    });
+  } catch (err) {
+    console.error("Recipes fetch failed:", err);
+    setRecipes([]);
+    setSelectedRecipe(null);
+  } finally {
+    setLoadingRecipes(false);
+  }
+};
 
   const createRecipe = async () => {
-    const title = newRecipeTitle.trim();
-    if (!title) return alert("Recipe title is required.");
+  const title = newRecipeTitle.trim();
+  if (!title) return alert("Recipe title is required.");
 
-    const tags = newRecipeTags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
+  const tags = newRecipeTags
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
 
-    const ingredients = newRecipeIngredients
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((name) => ({ name }));
+  const ingredients = newRecipeIngredients
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((name) => ({ name }));
 
-    const steps = newRecipeSteps
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
+  const steps = newRecipeSteps
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
 
-    setCreatingRecipe(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/recipes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: null,
-          title,
-          tags,
-          ingredients,
-          steps,
-          source: "manual",
-        }),
-      });
+  setCreatingRecipe(true);
+  try {
+    const res = await fetch(`${API_BASE}/api/recipes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: null,
+        title,
+        tags,
+        ingredients,
+        steps,
+        source: "manual",
+      }),
+    });
 
-      if (!res.ok) throw new Error("Failed to create recipe");
+    if (!res.ok) throw new Error("Failed to create recipe");
 
-      setNewRecipeTitle("");
-      setNewRecipeTags("");
-      setNewRecipeIngredients("");
-      setNewRecipeSteps("");
+    setNewRecipeTitle("");
+    setNewRecipeTags("");
+    setNewRecipeIngredients("");
+    setNewRecipeSteps("");
 
-      await fetchRecipes();
-    } catch (err) {
-      console.error(err);
-      alert("Could not create recipe. Check backend logs.");
-    } finally {
-      setCreatingRecipe(false);
-    }
-  };
+    await fetchRecipes();
+  } catch (err) {
+    console.error(err);
+    alert("Could not create recipe. Check backend logs.");
+  } finally {
+    setCreatingRecipe(false);
+  }
+};
 
   // -----------------------------
   // API: user (demo)
@@ -1008,26 +1021,43 @@ Keep it concise and practical.
                 {creatingRecipe ? "Saving…" : "Save recipe"}
               </button>
             </div>
-
             {loadingRecipes && <div className="pp-muted">Loading recipes…</div>}
 
             {!loadingRecipes && recipes.length === 0 && (
               <div className="pp-muted">No recipes yet. Create one above.</div>
             )}
 
-            {recipes.map((r) => (
-              <div key={r.id} className="pp-card">
-                <div className="pp-cardTitle">{r.title}</div>
-                <div className="pp-muted">
-                  {Array.isArray(r.tags) ? r.tags.join(", ") : ""}
+            {!loadingRecipes && recipes.length > 0 && (
+              <>
+                <div className="pp-recipeList">
+                  {recipes.map((r) => {
+                    const isActive = selectedRecipe?.id === r.id;
+
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        className={`pp-card pp-recipeCardButton ${isActive ? "pp-recipeCardButtonActive" : ""}`}
+                        onClick={() => setSelectedRecipe(r)}
+                      >
+                        <div className="pp-cardTitle">{r.title}</div>
+
+                        <div className="pp-muted">
+                          {Array.isArray(r.tags) ? r.tags.join(", ") : ""}
+                        </div>
+
+                        <div className="pp-muted">
+                          Ingredients: {Array.isArray(r.ingredients) ? r.ingredients.length : 0} •
+                          {" "}Steps: {Array.isArray(r.steps) ? r.steps.length : 0}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-                <div className="pp-muted">
-                  Ingredients:{" "}
-                  {Array.isArray(r.ingredients) ? r.ingredients.length : 0} •
-                  Steps: {Array.isArray(r.steps) ? r.steps.length : 0}
-                </div>
-              </div>
-            ))}
+
+              </>
+            )}
+
           </PanelShell>
         )}
 
@@ -1100,57 +1130,73 @@ Keep it concise and practical.
         )}
       </div>
 
-      {/* Main chat panel */}
-      <div className="pp-main">
-        <header className="pp-topbar">
-          <div className="pp-topbarInner">
-            <div>
-              <h1 className="pp-title">PantryPal</h1>
-              <p className="pp-subtitle">Grocery & meal planning assistant</p>
-            </div>
-
-            <div className="pp-actions">
-              <span className="pp-pill">beta</span>
-
-              <span className="pp-muted" style={{ marginRight: 6 }}>
-                Hi, <b style={{ color: "var(--text)" }}>{sessionUser?.name}</b>
-              </span>
-
-              <button
-                type="button"
-                className="pp-btn"
-                style={{ width: "auto" }}
-                onClick={signOut}
-              >
-                Sign out
-              </button>
-
-              {/* Hidden input used by button */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-                style={{ display: "none" }}
-              />
-
-              <button
-                type="button"
-                className={`pp-uploadBtn ${
-                  uploading ? "pp-uploadDisabled" : ""
-                }`}
-                onClick={() => {
-                  if (uploading) return;
-                  fileInputRef.current?.click();
-                }}
-                aria-label="Upload image"
-              >
-                <UploadCloud size={16} />
-                {pendingFile ? "Image attached" : "Upload image"}
-              </button>
-            </div>
+         {/* Main chat panel */}
+    <div className="pp-main">
+      <header className="pp-topbar">
+        <div className="pp-topbarInner">
+          <div className="topbarLeft">
+            <h1 className="pp-title">PantryPal</h1>
+            <p className="pp-subtitle">AI recipe generator & grocery list helper</p>
           </div>
-        </header>
+
+          <div className="pp-actions">
+            {/* Softer beta badge */}
+            <span className="pp-pill">beta</span>
+
+            {/* 
+              User profile pill.
+              This is only a visual upgrade and does not affect auth/session logic.
+            */}
+            <div className="pp-userPill">
+              <div className="pp-userAvatar">
+                {sessionUser?.name?.[0]?.toUpperCase() || "U"}
+              </div>
+              <span>{sessionUser?.name || "User"}</span>
+            </div>
+
+            {/* 
+              Keep the same sign-out functionality.
+              Only the visual style changes through CSS.
+            */}
+            <button
+              type="button"
+              className="pp-btn pp-btnGhost"
+              onClick={signOut}
+            >
+              Sign out
+            </button>
+
+            {/* Hidden input used by button */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              style={{ display: "none" }}
+            />
+
+            {/* 
+              Keep the same upload functionality.
+              Still disabled visually when uploading.
+              Still opens the same hidden file input.
+            */}
+            <button
+              type="button"
+              className={`pp-uploadBtn pp-btnPrimary ${
+                uploading ? "pp-uploadDisabled" : ""
+              }`}
+              onClick={() => {
+                if (uploading) return;
+                fileInputRef.current?.click();
+              }}
+              aria-label="Upload pantry photo"
+            >
+              <UploadCloud size={16} />
+              {pendingFile ? "Image attached" : "Upload pantry photo"}
+            </button>
+          </div>
+        </div>
+      </header>
 
         {/* Drop-enabled chat wrap */}
         <div
@@ -1175,48 +1221,126 @@ Keep it concise and practical.
           )}
 
           <div className="pp-chatColumn">
+            
+                {selectedRecipe && (
+                  <div className="pp-card">
+                    <div className="pp-cardTitle" style={{ fontSize: 15, marginBottom: 8 }}>
+                      {selectedRecipe.title}
+                    </div>
+
+                    {Array.isArray(selectedRecipe.tags) && selectedRecipe.tags.length > 0 && (
+                      <div className="pp-muted" style={{ marginBottom: 12 }}>
+                        {selectedRecipe.tags.join(", ")}
+                      </div>
+                    )}
+
+                    <div style={{ fontWeight: 800, marginBottom: 8 }}>Ingredients</div>
+                    <ul className="pp-recipeDetailList">
+                      {(selectedRecipe.ingredients || []).map((ingredient, index) => (
+                        <li key={index}>
+                          {typeof ingredient === "string"
+                            ? ingredient
+                            : ingredient?.name || JSON.stringify(ingredient)}
+                        </li>
+                      ))}
+                    </ul>
+
+                    <div style={{ fontWeight: 800, marginTop: 14, marginBottom: 8 }}>Steps</div>
+                    <ol className="pp-recipeDetailList">
+                      {(selectedRecipe.steps || []).map((step, index) => (
+                        <li key={index}>{step}</li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+                
             {isEmpty && (
               <div className="pp-landing">
-                <div className="pp-empty">
-                  <div className="pp-emptyTop">
-                    <div className="pp-emptyIcon">
-                      <Carrot size={18} />
-                    </div>
-                    <div>
-                      <p className="pp-emptyTitle">What are we shopping for?</p>
-                      <p className="pp-emptySub">
-                        Start with a goal — dinner ideas, a grocery list, or
-                        “use what I have.”
-                      </p>
-                    </div>
-                  </div>
+                {/* 
+                  Pretty landing hero card.
+                  This only changes the empty-state layout and styling hooks.
+                  It does NOT change any chat, upload, or suggestion functionality.
+                */}
+                <div className="pp-empty pp-emptyHero">
+                  {/* Soft decorative background orbs for a more polished look */}
+                  <div className="pp-emptyGlow pp-emptyGlowOne" aria-hidden="true" />
+                  <div className="pp-emptyGlow pp-emptyGlowTwo" aria-hidden="true" />
 
-                  <div className="pp-chipRow">
-                    {loadingSuggestions && visibleSuggestions.length === 0 ? (
-                      <div className="pp-muted" style={{ marginTop: 8 }}>
-                        Generating suggestions…
+                  {/* Hero header area */}
+                  <div className="pp-emptyHeroTop">
+                    <div className="pp-emptyHeroBadge">
+                      <div className="pp-emptyIcon">
+                        <Carrot size={18} />
                       </div>
-                    ) : (
-                      visibleSuggestions.map((s, idx) => (
-                        <button
-                          key={`${s.label}-${idx}`}
-                          type="button"
-                          className="pp-chip"
-                          onClick={() => sendTextToChat(s.prompt)}
-                        >
-                          {s.emoji ? `${s.emoji} ` : ""}
-                          {s.label}
-                        </button>
-                      ))
-                    )}
+
+                      <div className="pp-emptyHeroBadgeText">
+                        <span className="pp-emptyEyebrow">PantryPal assistant</span>
+                          {/* Updated heading to reflect recipe generator purpose */}
+                          <p className="pp-emptyTitle">What would you like to cook?</p>
+
+                          <p className="pp-emptySub">
+                            Get recipe ideas, generate meals from your pantry, or build a grocery list.
+                          </p>
+                      </div>
+                    </div>
+
+                    {/* 
+                      Primary visual callout.
+                      This is only a quick action button that reuses your existing upload input.
+                      No new functionality is introduced.
+                    */}
+                    <button
+                      type="button"
+                      className="pp-emptyUploadBtn"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <UploadCloud size={16} />
+                      Upload pantry photo
+                    </button>
                   </div>
 
-                  <div className="pp-chipHint">
-                    Tip: drag & drop a pantry photo to attach it, then press
-                    Send.
+                  {/* Small helper feature cards for visual hierarchy */}
+                  
+                 
+
+                  {/* Suggestion chips keep the same click behavior as before */}
+                  <div className="pp-emptySection">
+                    <div className="pp-emptySectionLabel">Try one of these</div>
+
+                    <div className="pp-chipRow">
+                      {loadingSuggestions && visibleSuggestions.length === 0 ? (
+                        <div className="pp-muted" style={{ marginTop: 8 }}>
+                          Generating suggestions…
+                        </div>
+                      ) : (
+                        visibleSuggestions.map((s, idx) => (
+                          <button
+                            key={`${s.label}-${idx}`}
+                            type="button"
+                            className="pp-chip pp-chipHero"
+                            onClick={() => sendTextToChat(s.prompt)}
+                          >
+                            <span className="pp-chipEmoji" aria-hidden="true">
+                              {s.emoji || "✨"}
+                            </span>
+                            <span>{s.label}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bottom helper note */}
+                  <div className="pp-chipHint pp-emptyHint">
+                    Tip: drag & drop a pantry photo anywhere in the chat area to attach it,
+                    then press Send.
                   </div>
                 </div>
 
+                {/* 
+                  Keep the existing intro card.
+                  This preserves your original empty-state assistant introduction.
+                */}
                 <div className="pp-intro">
                   <div className="pp-introTop">
                     <div className="pp-introAvatar">
