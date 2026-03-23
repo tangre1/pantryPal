@@ -80,88 +80,102 @@ export default function Register({ onAuthed, onGoToSignIn }) {
   };
 
   return (
-    <div
-      className="pp-shell"
-      style={{
-        alignItems: "center",
-        justifyContent: "center",
-        flexDirection: "column",
-      }}
-    >
-      <div className="pp-card" style={{ width: "min(420px, 92vw)", textAlign: "center" }}>
-        <div className="pp-cardTitle" style={{ fontSize: 18, marginBottom: 8 }}>
-          🥕 Create Account
+  <div
+  className="pp-shell pp-authShell"
+  style={{
+    backgroundImage: `
+      linear-gradient(rgba(248,244,236,0.45), rgba(248,244,236,0.55)),
+      radial-gradient(circle at left center, rgba(248,244,236,0.85) 0%, rgba(248,244,236,0.45) 40%, rgba(248,244,236,0.15) 70%, rgba(248,244,236,0.05) 100%),
+      url(${import.meta.env.BASE_URL}pantry.jpg)
+    `,
+    backgroundPosition: "center",
+    backgroundSize: "cover",
+    backgroundRepeat: "no-repeat",
+  }}
+>
+    <div className="pp-authHero">
+      <div className="pp-authVisual">
+        <div className="pp-authBadge">🥕 PantryPal</div>
+        <h1 className="pp-authHeading">Create your PantryPal account today!</h1>
+        <p className="pp-authLead">
+         Transform everyday ingredients into inspired meals, discover recipes, save time, and cook with confidence.
+        </p>
+        <div className="pp-authHighlights">
+          <span> Scan ingredients</span>
+          <span> Get recipe ideas</span>
+          <span> Save on groceries</span>
+        </div>
+      </div>
+
+      <div className="pp-authCard">
+        <div className="pp-authTitle">Create account</div>
+        <div className="pp-muted" style={{ textAlign: "center", marginBottom: 14 }}>
+          Demo account saved locally in your browser
         </div>
 
-        <div className="pp-muted" style={{ marginBottom: 12 }}>
-          Demo register (saved locally in your browser)
-        </div>
-
-        <form onSubmit={handleRegister} style={{ textAlign: "left" }}>
+        <form onSubmit={handleRegister} className="pp-authForm">
           <input
             ref={nameRef}
-            className="pp-input"
+            className="pp-input pp-authInput"
             placeholder="Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoComplete="name"
-            style={{ width: "100%" }}
           />
 
-          <div style={{ height: 10 }} />
+          <div style={{ height: 12 }} />
 
           <input
-            className="pp-input"
+            className="pp-input pp-authInput"
             placeholder="Email address"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
-            style={{ width: "100%" }}
           />
 
-          <div style={{ height: 10 }} />
+          <div style={{ height: 12 }} />
 
           <input
-            className="pp-input"
+            className="pp-input pp-authInput"
             type="password"
             placeholder="Password (min 4 chars)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="new-password"
-            style={{ width: "100%" }}
           />
 
-          <div style={{ height: 10 }} />
+          <div style={{ height: 12 }} />
 
           <input
-            className="pp-input"
+            className="pp-input pp-authInput"
             type="password"
             placeholder="Confirm password"
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
             autoComplete="new-password"
-            style={{ width: "100%" }}
           />
 
           {error && (
-            <div style={{ marginTop: 10, textAlign: "center" }} className="pp-muted">
+            <div style={{ marginTop: 12, textAlign: "center" }} className="pp-muted">
               ⚠️ {error}
             </div>
           )}
 
-          <div style={{ height: 12 }} />
+          <div style={{ height: 14 }} />
 
           <button type="submit" className="pp-btn pp-btnPrimary" style={{ width: "100%" }}>
             Create account
           </button>
 
-          <div style={{ marginTop: 12 }}>
-            <button type="button" className="pp-btn" style={{ width: "100%" }} onClick={onGoToSignIn}>
+          <div className="pp-authFooter">
+            <span className="pp-muted" style={{ marginTop: 0 }}>Already have an account?</span>
+            <button type="button" className="pp-linkBtn" onClick={onGoToSignIn}>
               Back to sign in
             </button>
           </div>
         </form>
       </div>
     </div>
-  );
+  </div>
+);
 }

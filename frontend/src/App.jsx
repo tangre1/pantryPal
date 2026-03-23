@@ -16,10 +16,14 @@ const PANELS = {
   USER: "user",
 };
 
-// -----------------------------
-// Demo Auth (localStorage)
-// -----------------------------
 const STORAGE_KEY = "pp_user";
+
+const HOME_MESSAGE = {
+  id: 1,
+  role: "assistant",
+  content:
+    "Hi, I’m PantryPal 🥕\nTell me what you’re shopping for and I’ll help with lists and meal ideas.",
+};
 
 function readSavedUser() {
   try {
@@ -66,13 +70,11 @@ const PanelShell = ({ title, subtitle, onClose, children }) => (
   </div>
 );
 
-// ✅ App only manages auth/session (stable hook order)
 export default function App() {
   const [sessionUser, setSessionUser] = useState(() => readSavedUser());
-  const [authMode, setAuthMode] = useState("signin"); // "signin" | "register"
+  const [authMode, setAuthMode] = useState("signin");
 
   const handleAuthed = (user) => {
-    // Persist immediately so refresh isn't required
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(user));
     } catch {}
@@ -87,21 +89,22 @@ export default function App() {
     setAuthMode("signin");
   };
 
-  // ✅ Keep returns after hooks + handlers are defined
   return sessionUser ? (
     <PantryPalApp sessionUser={sessionUser} signOut={signOut} />
   ) : authMode === "register" ? (
-    <Register onAuthed={handleAuthed} onGoToSignIn={() => setAuthMode("signin")} />
+    <Register
+      onAuthed={handleAuthed}
+      onGoToSignIn={() => setAuthMode("signin")}
+    />
   ) : (
-    <AuthGate onAuthed={handleAuthed} onCreateAccount={() => setAuthMode("register")} />
+    <AuthGate
+      onAuthed={handleAuthed}
+      onCreateAccount={() => setAuthMode("register")}
+    />
   );
 }
 
-// ✅ Everything else moved into a child component so hooks are consistent
 function PantryPalApp({ sessionUser, signOut }) {
-  // -----------------------------
-  // PantryPal UI State
-  // -----------------------------
   const [activePanel, setActivePanel] = useState(null);
   const [panelPinned, setPanelPinned] = useState(false);
 
@@ -110,7 +113,6 @@ function PantryPalApp({ sessionUser, signOut }) {
 
   const [showWelcome, setShowWelcome] = useState(false);
 
-  // Stable ids
   const idRef = useRef(2);
   const nextId = () => {
     const id = idRef.current;
@@ -118,17 +120,9 @@ function PantryPalApp({ sessionUser, signOut }) {
     return id;
   };
 
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      role: "assistant",
-      content:
-        "Hi, I’m PantryPal 🥕\nTell me what you’re shopping for and I’ll help with lists and meal ideas.",
-    },
-  ]);
-
-  // Keep latest messages in a ref so chat history isn't stale inside async handlers
+  const [messages, setMessages] = useState([HOME_MESSAGE]);
   const messagesRef = useRef(messages);
+
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
@@ -136,7 +130,6 @@ function PantryPalApp({ sessionUser, signOut }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // keep extracted result internally (not rendered)
   const [imageResult, setImageResult] = useState(null);
   const [uploading, setUploading] = useState(false);
 
@@ -157,16 +150,41 @@ function PantryPalApp({ sessionUser, signOut }) {
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
-
-  // Upload input ref (so dropzone + button share the same input)
   const fileInputRef = useRef(null);
 
-  // Drag/drop UI state
   const [dragOver, setDragOver] = useState(false);
-
-  // Pending attachment (attach now, upload on Send)
   const [pendingFile, setPendingFile] = useState(null);
   const [pendingPreviewUrl, setPendingPreviewUrl] = useState(null);
+
+  const [suggestions, setSuggestions] = useState([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
+  const fallbackSuggestions = [
+    {
+      label: "Weekly Grocery List",
+      prompt:
+        "Build me a weekly grocery list with a few meal ideas, grouped by category.",
+    },
+    {
+      label: "Quick Meal Plan",
+      prompt:
+        "Plan 3 quick dinners for this week and give me one combined grocery list.",
+    },
+    {
+      label: "Save on Groceries",
+      prompt:
+        "Help me save money on groceries this week—suggest a budget meal plan and list.",
+    },
+    {
+      label: "High-Protein Ideas",
+      prompt: "Suggest 3 high-protein dinners and give me a grocery list.",
+    },
+  ];
+
+  const isEmpty = messages.length <= 1;
+  const visibleSuggestions = (
+    suggestions.length ? suggestions : fallbackSuggestions
+  ).slice(0, 4);
 
   const attachFile = (file) => {
     if (!file) return;
@@ -196,15 +214,12 @@ function PantryPalApp({ sessionUser, signOut }) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  // Cleanup preview URL on unmount
   useEffect(() => {
     return () => {
       if (pendingPreviewUrl) URL.revokeObjectURL(pendingPreviewUrl);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pendingPreviewUrl]);
 
-  // ---------- Welcome modal (show once) ----------
   useEffect(() => {
     const seen = localStorage.getItem("pp_welcome_seen");
     if (!seen) setShowWelcome(true);
@@ -225,10 +240,20 @@ function PantryPalApp({ sessionUser, signOut }) {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [showWelcome]);
 
-  // ---------- Panel open/close behavior ----------
   const closePanel = () => {
     setActivePanel(null);
     setPanelPinned(false);
+  };
+
+  const goHome = () => {
+    closePanel();
+    clearAttachment();
+    setInput("");
+    setLoading(false);
+    setUploading(false);
+    setImageResult(null);
+    setMessages([HOME_MESSAGE]);
+    setTimeout(() => inputRef.current?.focus(), 0);
   };
 
   const togglePanelPinned = (name) => {
@@ -255,16 +280,12 @@ function PantryPalApp({ sessionUser, signOut }) {
     }, 180);
   };
 
-  // Click outside the left rail+panel closes it (even if pinned)
   useEffect(() => {
     const onMouseDown = (e) => {
       if (!activePanel) return;
       const leftEl = leftRef.current;
       if (!leftEl) return;
-
-      if (!leftEl.contains(e.target)) {
-        closePanel();
-      }
+      if (!leftEl.contains(e.target)) closePanel();
     };
 
     document.addEventListener("mousedown", onMouseDown);
@@ -279,9 +300,6 @@ function PantryPalApp({ sessionUser, signOut }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // -----------------------------
-  // API: snapshots
-  // -----------------------------
   const fetchSnapshots = async () => {
     setLoadingSnapshots(true);
     try {
@@ -320,9 +338,6 @@ function PantryPalApp({ sessionUser, signOut }) {
     }
   };
 
-  // -----------------------------
-  // API: recipes
-  // -----------------------------
   const fetchRecipes = async () => {
     setLoadingRecipes(true);
     try {
@@ -340,7 +355,10 @@ function PantryPalApp({ sessionUser, signOut }) {
 
   const createRecipe = async () => {
     const title = newRecipeTitle.trim();
-    if (!title) return alert("Recipe title is required.");
+    if (!title) {
+      alert("Recipe title is required.");
+      return;
+    }
 
     const tags = newRecipeTags
       .split(",")
@@ -389,9 +407,6 @@ function PantryPalApp({ sessionUser, signOut }) {
     }
   };
 
-  // -----------------------------
-  // API: user (demo)
-  // -----------------------------
   const fetchUser = async () => {
     setLoadingUser(true);
     try {
@@ -417,9 +432,6 @@ function PantryPalApp({ sessionUser, signOut }) {
     if (activePanel === PANELS.USER) fetchUser();
   }, [activePanel]);
 
-  // -----------------------------
-  // Chat (generic)
-  // -----------------------------
   const chatWithAssistant = async (userText) => {
     const trimmed = (userText || "").trim();
     if (!trimmed) return;
@@ -460,7 +472,6 @@ function PantryPalApp({ sessionUser, signOut }) {
     }
   };
 
-  // Used in other places (welcome chips, snapshot actions)
   const sendTextToChat = async (text) => {
     const trimmed = (text || "").trim();
     if (!trimmed || loading) return;
@@ -473,9 +484,6 @@ function PantryPalApp({ sessionUser, signOut }) {
     await chatWithAssistant(trimmed);
   };
 
-  // -----------------------------
-  // Image analysis (returns extracted data)
-  // -----------------------------
   const analyzeImageFile = async (file) => {
     if (!file) return null;
 
@@ -528,14 +536,12 @@ function PantryPalApp({ sessionUser, signOut }) {
     }
   };
 
-  // File picker ATTACHES (does not analyze immediately)
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     attachFile(file);
   };
 
-  // Drag/drop handlers (ATTACH on drop)
   const onDragOver = (e) => {
     e.preventDefault();
     if (uploading) return;
@@ -557,7 +563,6 @@ function PantryPalApp({ sessionUser, signOut }) {
     attachFile(file);
   };
 
-  // ✅ Correct order: analyze image first, then chat using extracted items + user text
   const sendMessage = async (e) => {
     e.preventDefault();
     if (loading || uploading) return;
@@ -567,7 +572,6 @@ function PantryPalApp({ sessionUser, signOut }) {
 
     if (!text && !file) return;
 
-    // Show a single user bubble representing the action
     const userBubble =
       (text ? text : "") +
       (file ? (text ? "\n\n" : "") + "📷 (image attached)" : "");
@@ -578,19 +582,14 @@ function PantryPalApp({ sessionUser, signOut }) {
     ]);
     setInput("");
 
-    // If no file, just chat normally with the text
     if (!file) {
       await chatWithAssistant(text);
       return;
     }
 
-    // 1) Analyze first
     const extracted = await analyzeImageFile(file);
-
-    // Clear attachment after analysis finishes
     clearAttachment();
 
-    // 2) Build prompt with extracted items
     const items = extracted?.items ?? extracted ?? null;
 
     const prompt = [
@@ -610,7 +609,6 @@ function PantryPalApp({ sessionUser, signOut }) {
       "Keep it concise and practical.",
     ].join("\n");
 
-    // 3) Now chat
     await chatWithAssistant(prompt);
   };
 
@@ -641,40 +639,6 @@ Keep it concise and practical.
     await sendTextToChat(prompt);
   };
 
-  const isEmpty = messages.length <= 1;
-
-  // -----------------------------
-  // AI landing suggestions
-  // -----------------------------
-  const [suggestions, setSuggestions] = useState([]);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-
-  const fallbackSuggestions = [
-    {
-      emoji: "🍳",
-      label: "Weekly Grocery List",
-      prompt:
-        "Build me a weekly grocery list with a few meal ideas, grouped by category.",
-    },
-    {
-      emoji: "🍽️",
-      label: "Quick Meal Plan",
-      prompt:
-        "Plan 3 quick dinners for this week and give me one combined grocery list.",
-    },
-    {
-      emoji: "💸",
-      label: "Save on Groceries",
-      prompt:
-        "Help me save money on groceries this week—suggest a budget meal plan and list.",
-    },
-    {
-      emoji: "💪",
-      label: "High-Protein Ideas",
-      prompt: "Suggest 3 high-protein dinners and give me a grocery list.",
-    },
-  ];
-
   const fetchSuggestions = async () => {
     setLoadingSuggestions(true);
     try {
@@ -693,16 +657,10 @@ Keep it concise and practical.
 
   useEffect(() => {
     if (isEmpty) fetchSuggestions();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEmpty]);
-
-  const visibleSuggestions = (
-    suggestions.length ? suggestions : fallbackSuggestions
-  ).slice(0, 4);
 
   return (
     <div className="pp-shell">
-      {/* Welcome modal */}
       {showWelcome && (
         <div
           className="pp-modalOverlay"
@@ -786,7 +744,9 @@ Keep it concise and practical.
                 <div className="pp-modalCardIcon">🛒</div>
                 <div>
                   <div className="pp-modalCardTitle">Smart Grocery List</div>
-                  <div className="pp-modalCardSub">Fast Q&A → organized list</div>
+                  <div className="pp-modalCardSub">
+                    Fast Q&amp;A → organized list
+                  </div>
                 </div>
               </button>
 
@@ -831,7 +791,6 @@ Keep it concise and practical.
         </div>
       )}
 
-      {/* LEFT SIDE: rail + panel as one full-height column */}
       <div
         className="pp-left"
         ref={leftRef}
@@ -840,11 +799,16 @@ Keep it concise and practical.
         }}
         onMouseLeave={requestClosePanelSoon}
       >
-        {/* Left rail */}
         <div className="pp-rail">
-          <div className="pp-railBrand" aria-label="PantryPal">
+          <button
+            className="pp-railBrand"
+            aria-label="PantryPal"
+            title="Go home"
+            type="button"
+            onClick={goHome}
+          >
             🥕
-          </div>
+          </button>
 
           <RailButton
             title="Scan history"
@@ -876,14 +840,11 @@ Keep it concise and practical.
           <div style={{ flex: 1 }} />
         </div>
 
-        {/* Expandable panel */}
         {activePanel === PANELS.HISTORY && (
           <PanelShell
             title="Scan History"
             subtitle={
-              panelPinned
-                ? "Pinned • Click outside to hide"
-                : "Hover away to hide"
+              panelPinned ? "Pinned • Click outside to hide" : "Hover away to hide"
             }
             onClose={closePanel}
           >
@@ -937,9 +898,7 @@ Keep it concise and practical.
           <PanelShell
             title="Recipes"
             subtitle={
-              panelPinned
-                ? "Pinned • Click outside to hide"
-                : "Hover away to hide"
+              panelPinned ? "Pinned • Click outside to hide" : "Hover away to hide"
             }
             onClose={closePanel}
           >
@@ -947,85 +906,83 @@ Keep it concise and practical.
               Refresh
             </button>
 
-            <div className="pp-card" style={{ marginTop: 12 }}>
-              <div className="pp-cardTitle" style={{ marginBottom: 10 }}>
-                Create a recipe
-              </div>
+            <div style={{ height: 12 }} />
+
+            <div className="pp-card">
+              <div className="pp-cardTitle">Add a recipe</div>
 
               <input
+                className="pp-input"
+                placeholder="Recipe title"
                 value={newRecipeTitle}
                 onChange={(e) => setNewRecipeTitle(e.target.value)}
-                placeholder="Title (required)"
-                className="pp-input"
-                style={{ borderRadius: 12 }}
               />
 
-              <div style={{ height: 10 }} />
+              <div style={{ height: 8 }} />
 
               <input
+                className="pp-input"
+                placeholder="Tags (comma separated)"
                 value={newRecipeTags}
                 onChange={(e) => setNewRecipeTags(e.target.value)}
-                placeholder="Tags (comma separated) e.g. dinner, easy"
-                className="pp-input"
-                style={{ borderRadius: 12 }}
               />
 
-              <div style={{ height: 10 }} />
+              <div style={{ height: 8 }} />
 
               <textarea
+                className="pp-input"
+                rows={4}
+                placeholder="Ingredients (one per line)"
                 value={newRecipeIngredients}
                 onChange={(e) => setNewRecipeIngredients(e.target.value)}
-                placeholder={
-                  "Ingredients (one per line)\nExample:\nChicken\nRice\nBroccoli"
-                }
-                rows={4}
+              />
+
+              <div style={{ height: 8 }} />
+
+              <textarea
                 className="pp-input"
-                style={{ borderRadius: 12, resize: "vertical" }}
+                rows={4}
+                placeholder="Steps (one per line)"
+                value={newRecipeSteps}
+                onChange={(e) => setNewRecipeSteps(e.target.value)}
               />
 
               <div style={{ height: 10 }} />
-
-              <textarea
-                value={newRecipeSteps}
-                onChange={(e) => setNewRecipeSteps(e.target.value)}
-                placeholder={
-                  "Steps (one per line)\nExample:\nCook chicken\nCook rice\nServe together"
-                }
-                rows={4}
-                className="pp-input"
-                style={{ borderRadius: 12, resize: "vertical" }}
-              />
-
-              <div style={{ height: 12 }} />
 
               <button
                 type="button"
+                className="pp-btn pp-btnPrimary"
                 onClick={createRecipe}
                 disabled={creatingRecipe}
-                className="pp-btn pp-btnPrimary"
-                style={{ opacity: creatingRecipe ? 0.7 : 1 }}
               >
-                {creatingRecipe ? "Saving…" : "Save recipe"}
+                {creatingRecipe ? "Creating..." : "Create recipe"}
               </button>
             </div>
+
+            <div style={{ height: 12 }} />
 
             {loadingRecipes && <div className="pp-muted">Loading recipes…</div>}
 
             {!loadingRecipes && recipes.length === 0 && (
-              <div className="pp-muted">No recipes yet. Create one above.</div>
+              <div className="pp-muted">No recipes yet.</div>
             )}
 
-            {recipes.map((r) => (
-              <div key={r.id} className="pp-card">
-                <div className="pp-cardTitle">{r.title}</div>
-                <div className="pp-muted">
-                  {Array.isArray(r.tags) ? r.tags.join(", ") : ""}
-                </div>
-                <div className="pp-muted">
-                  Ingredients:{" "}
-                  {Array.isArray(r.ingredients) ? r.ingredients.length : 0} •
-                  Steps: {Array.isArray(r.steps) ? r.steps.length : 0}
-                </div>
+            {recipes.map((recipe) => (
+              <div key={recipe.id} className="pp-card">
+                <div className="pp-cardTitle">{recipe.title}</div>
+
+                {!!recipe.tags?.length && (
+                  <div className="pp-muted">Tags: {recipe.tags.join(", ")}</div>
+                )}
+
+                {!!recipe.ingredients?.length && (
+                  <div className="pp-muted" style={{ marginTop: 6 }}>
+                    Ingredients:{" "}
+                    {recipe.ingredients
+                      .map((ing) => ing.name || ing)
+                      .join(", ")}
+                  </div>
+                )}
               </div>
             ))}
           </PanelShell>
@@ -1035,72 +992,35 @@ Keep it concise and practical.
           <PanelShell
             title="User Profile"
             subtitle={
-              panelPinned
-                ? "Pinned • Click outside to hide"
-                : "Hover away to hide"
+              panelPinned ? "Pinned • Click outside to hide" : "Hover away to hide"
             }
             onClose={closePanel}
           >
-            <div className="pp-muted" style={{ marginBottom: 12 }}>
-              For demo purposes this tries to load user id <b>1</b>:
-              <div
-                style={{
-                  marginTop: 6,
-                  fontFamily: "monospace",
-                  fontSize: 12,
-                }}
-              >
-                GET /api/users/1
-              </div>
-            </div>
+            <button type="button" onClick={fetchUser} className="pp-btn">
+              Refresh
+            </button>
+
+            <div style={{ height: 12 }} />
 
             {loadingUser && <div className="pp-muted">Loading user…</div>}
 
             {!loadingUser && !user && (
-              <div className="pp-muted">
-                No user loaded yet. Create one via POST /api/users, or change
-                the fetchUser() function.
+              <div className="pp-card">
+                <div className="pp-cardTitle">{sessionUser?.name || "Guest"}</div>
+                <div className="pp-muted">{sessionUser?.email || "No email"}</div>
               </div>
             )}
 
-            {user && (
+            {!loadingUser && user && (
               <div className="pp-card">
-                <div style={{ fontWeight: 900, fontSize: 16 }}>{user.name}</div>
-
-                <div
-                  className="pp-muted"
-                  style={{ marginTop: 8, color: "var(--text)" }}
-                >
-                  Budget: <b>{user.budget_style}</b>
-                </div>
-                <div className="pp-muted" style={{ color: "var(--text)" }}>
-                  Household size: <b>{user.household_size}</b>
-                </div>
-
-                <div className="pp-muted" style={{ marginTop: 12 }}>
-                  Dietary prefs:
-                </div>
-
-                <pre
-                  style={{
-                    marginTop: 8,
-                    padding: 12,
-                    background: "#0b1220",
-                    color: "#e5e7eb",
-                    borderRadius: 12,
-                    fontSize: 12,
-                    overflowX: "auto",
-                  }}
-                >
-                  {JSON.stringify(user.dietary_prefs, null, 2)}
-                </pre>
+                <div className="pp-cardTitle">{user.name || sessionUser?.name}</div>
+                <div className="pp-muted">{user.email || sessionUser?.email}</div>
               </div>
             )}
           </PanelShell>
         )}
       </div>
 
-      {/* Main chat panel */}
       <div className="pp-main">
         <header className="pp-topbar">
           <div className="pp-topbarInner">
@@ -1125,7 +1045,6 @@ Keep it concise and practical.
                 Sign out
               </button>
 
-              {/* Hidden input used by button */}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1136,9 +1055,7 @@ Keep it concise and practical.
 
               <button
                 type="button"
-                className={`pp-uploadBtn ${
-                  uploading ? "pp-uploadDisabled" : ""
-                }`}
+                className={`pp-uploadBtn ${uploading ? "pp-uploadDisabled" : ""}`}
                 onClick={() => {
                   if (uploading) return;
                   fileInputRef.current?.click();
@@ -1152,14 +1069,12 @@ Keep it concise and practical.
           </div>
         </header>
 
-        {/* Drop-enabled chat wrap */}
         <div
           className={`pp-chatWrap ${dragOver ? "pp-chatWrapDrag" : ""}`}
           onDragOver={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
         >
-          {/* Drop overlay */}
           {dragOver && !uploading && (
             <div className="pp-dropOverlay" aria-hidden="true">
               <div className="pp-dropCard">
@@ -1167,53 +1082,59 @@ Keep it concise and practical.
                   <UploadCloud size={18} />
                 </div>
                 <div className="pp-dropTitle">Drop to attach</div>
-                <div className="pp-dropSub">
-                  Then type a message and press Send
-                </div>
+                <div className="pp-dropSub">Then type a message and press Send</div>
               </div>
             </div>
           )}
 
           <div className="pp-chatColumn">
             {isEmpty && (
-              <div className="pp-landing">
+              <>
                 <div className="pp-empty">
-                  <div className="pp-emptyTop">
-                    <div className="pp-emptyIcon">
-                      <Carrot size={18} />
-                    </div>
-                    <div>
-                      <p className="pp-emptyTitle">What are we shopping for?</p>
-                      <p className="pp-emptySub">
-                        Start with a goal — dinner ideas, a grocery list, or
-                        “use what I have.”
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="pp-chipRow">
-                    {loadingSuggestions && visibleSuggestions.length === 0 ? (
-                      <div className="pp-muted" style={{ marginTop: 8 }}>
-                        Generating suggestions…
+                  <div className="pp-emptyContent">
+                    <div className="pp-emptyLeft">
+                      <div className="pp-emptyTop">
+                        <div className="pp-emptyIcon">
+                          <Carrot size={18} />
+                        </div>
+                        <div>
+                          <p className="pp-emptyTitle">
+                            Let&apos;s get started! What are we looking for today?
+                          </p>
+                          <p className="pp-emptySub">
+                            Choose your meal and we’ll handle the rest!
+                          </p>
+                        </div>
                       </div>
-                    ) : (
-                      visibleSuggestions.map((s, idx) => (
-                        <button
-                          key={`${s.label}-${idx}`}
-                          type="button"
-                          className="pp-chip"
-                          onClick={() => sendTextToChat(s.prompt)}
-                        >
-                          {s.emoji ? `${s.emoji} ` : ""}
-                          {s.label}
-                        </button>
-                      ))
-                    )}
-                  </div>
 
-                  <div className="pp-chipHint">
-                    Tip: drag & drop a pantry photo to attach it, then press
-                    Send.
+                      <div className="pp-chipRow">
+                        {loadingSuggestions && visibleSuggestions.length === 0 ? (
+                          <div className="pp-muted" style={{ marginTop: 8 }}>
+                            Generating suggestions…
+                          </div>
+                        ) : (
+                          visibleSuggestions.map((s, idx) => (
+                            <button
+                              key={`${s.label}-${idx}`}
+                              type="button"
+                              className="pp-chip"
+                              onClick={() => sendTextToChat(s.prompt)}
+                            >
+                              {s.emoji ? `${s.emoji} ` : ""}
+                              {s.label}
+                            </button>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="pp-chipHint">
+                        Tip: drag &amp; drop a pantry photo to attach it, then press
+                        Send.
+                      </div>
+                    </div>
+
+                    <div className="pp-emptyArt">
+                    </div>
                   </div>
                 </div>
 
@@ -1225,20 +1146,18 @@ Keep it concise and practical.
                     <div className="pp-introName">PantryPal</div>
                   </div>
                   <p className="pp-introText">
-                    Tell me what you’re shopping for and I’ll help with lists
-                    and meal ideas.
+                    Tell me what you’re shopping for and I’ll help with lists and
+                    meal ideas.
                   </p>
                 </div>
-              </div>
+              </>
             )}
 
             {!isEmpty &&
               messages.map((m) => (
                 <div
                   key={m.id}
-                  className={`pp-row ${
-                    m.role === "user" ? "pp-rowUser" : "pp-rowBot"
-                  }`}
+                  className={`pp-row ${m.role === "user" ? "pp-rowUser" : "pp-rowBot"}`}
                 >
                   <div
                     className={`pp-bubble ${
@@ -1262,54 +1181,40 @@ Keep it concise and practical.
           </div>
         </div>
 
-        <form onSubmit={sendMessage} className="pp-composer">
-          {/* Attachment preview chip */}
-          {pendingFile && (
-            <div className="pp-attachRow">
-              <div className="pp-attachChip">
-                {pendingPreviewUrl ? (
-                  <img
-                    className="pp-attachThumb"
-                    src={pendingPreviewUrl}
-                    alt="Attachment preview"
-                  />
-                ) : null}
-
-                <div className="pp-attachMeta">
-                  <div className="pp-attachName">{pendingFile.name}</div>
-                  <div className="pp-attachSub">
-                    {(pendingFile.size / 1024 / 1024).toFixed(2)} MB
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  className="pp-attachRemove"
-                  onClick={clearAttachment}
-                  aria-label="Remove attachment"
-                >
-                  ✕
-                </button>
-              </div>
+        <form className="pp-composer" onSubmit={sendMessage}>
+          {pendingPreviewUrl && (
+            <div className="pp-attachPreview">
+              <img
+                src={pendingPreviewUrl}
+                alt="Attached preview"
+                className="pp-attachThumb"
+              />
+              <button
+                type="button"
+                className="pp-btn"
+                onClick={clearAttachment}
+                style={{ width: "auto" }}
+              >
+                Remove
+              </button>
             </div>
           )}
 
-          <div className="pp-composerInner">
+          <div className="pp-composeRow">
             <input
               ref={inputRef}
-              type="text"
+              className="pp-input"
               placeholder='Ask: "Make a grocery list for taco night"'
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              className="pp-input"
             />
 
             <button
               type="submit"
-              disabled={loading || uploading || (!input.trim() && !pendingFile)}
               className="pp-send"
+              disabled={loading || uploading}
             >
-              {uploading ? "Analyzing…" : loading ? "Sending…" : "Send"}
+              {loading || uploading ? "Working..." : "Send"}
             </button>
           </div>
         </form>
