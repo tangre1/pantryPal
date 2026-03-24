@@ -1221,38 +1221,6 @@ Keep it concise and practical.
           )}
 
           <div className="pp-chatColumn">
-            
-                {selectedRecipe && (
-                  <div className="pp-card">
-                    <div className="pp-cardTitle" style={{ fontSize: 15, marginBottom: 8 }}>
-                      {selectedRecipe.title}
-                    </div>
-
-                    {Array.isArray(selectedRecipe.tags) && selectedRecipe.tags.length > 0 && (
-                      <div className="pp-muted" style={{ marginBottom: 12 }}>
-                        {selectedRecipe.tags.join(", ")}
-                      </div>
-                    )}
-
-                    <div style={{ fontWeight: 800, marginBottom: 8 }}>Ingredients</div>
-                    <ul className="pp-recipeDetailList">
-                      {(selectedRecipe.ingredients || []).map((ingredient, index) => (
-                        <li key={index}>
-                          {typeof ingredient === "string"
-                            ? ingredient
-                            : ingredient?.name || JSON.stringify(ingredient)}
-                        </li>
-                      ))}
-                    </ul>
-
-                    <div style={{ fontWeight: 800, marginTop: 14, marginBottom: 8 }}>Steps</div>
-                    <ol className="pp-recipeDetailList">
-                      {(selectedRecipe.steps || []).map((step, index) => (
-                        <li key={index}>{step}</li>
-                      ))}
-                    </ol>
-                  </div>
-                )}
                 
             {isEmpty && (
               <div className="pp-landing">
@@ -1353,6 +1321,47 @@ Keep it concise and practical.
                     and meal ideas.
                   </p>
                 </div>
+              </div>
+            )}
+            {selectedRecipe && (
+              <div className="pp-card" style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  className="pp-selectedRecipeClose"
+                  onClick={() => setSelectedRecipe(null)}
+                  aria-label="Close recipe"
+                  title="Close recipe"
+                >
+                  ✕
+                </button>
+
+                <div className="pp-cardTitle" style={{ fontSize: 15, marginBottom: 8 }}>
+                  {selectedRecipe.title}
+                </div>
+
+                {Array.isArray(selectedRecipe.tags) && selectedRecipe.tags.length > 0 && (
+                  <div className="pp-muted" style={{ marginBottom: 12 }}>
+                    {selectedRecipe.tags.join(", ")}
+                  </div>
+                )}
+
+                <div style={{ fontWeight: 800, marginBottom: 8 }}>Ingredients</div>
+                <ul className="pp-recipeDetailList">
+                  {(selectedRecipe.ingredients || []).map((ingredient, index) => (
+                    <li key={index}>
+                      {typeof ingredient === "string"
+                        ? ingredient
+                        : ingredient?.name || JSON.stringify(ingredient)}
+                    </li>
+                  ))}
+                </ul>
+
+                <div style={{ fontWeight: 800, marginTop: 14, marginBottom: 8 }}>Steps</div>
+                <ol className="pp-recipeDetailList">
+                  {(selectedRecipe.steps || []).map((step, index) => (
+                    <li key={index}>{step}</li>
+                  ))}
+                </ol>
               </div>
             )}
 
