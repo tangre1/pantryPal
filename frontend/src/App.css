@@ -1154,10 +1154,28 @@ body {
 
 .pp-authForm{
   margin-top: 10px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 12px;   /* this spaces everything evenly */
+}
+
+/* Make buttons same width + size as inputs */
+.pp-authForm button{
+  width: 100%;
+  height: 48px;
+  border-radius: 999px;
+  box-sizing: border-box;
 }
 
 .pp-authInput{
   width: 100%;
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  box-sizing: border-box;
 }
 
 .pp-authFooter{
