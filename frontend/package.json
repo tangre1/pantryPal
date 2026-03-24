@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://tangre1.github.io/pantryPal/",
+  "homepage": "https://tangre1.github.io/pantryPal",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
