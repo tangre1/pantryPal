@@ -1117,46 +1117,77 @@ Keep it concise and practical.
               </div>
             )}
 
-            {userProfile && (
-              <div className="pp-card">
-                <div style={{ fontWeight: 900, fontSize: 16 }}>{userProfile.name}</div>
-
-                {userProfile.email && (
-                  <div className="pp-muted" style={{ marginTop: 6 }}>
-                    {userProfile.email}
-                  </div>
-                )}
-
-                <div
-                  className="pp-muted"
-                  style={{ marginTop: 10, color: "var(--text)" }}
-                >
-                  Budget: <b>{userProfile.budget_style}</b>
-                </div>
-
-                <div className="pp-muted" style={{ color: "var(--text)" }}>
-                  Household size: <b>{userProfile.household_size}</b>
-                </div>
-
-                <div className="pp-muted" style={{ marginTop: 12 }}>
-                  Dietary prefs:
-                </div>
-
-                <pre
-                  style={{
-                    marginTop: 8,
-                    padding: 12,
-                    background: "#0b1220",
-                    color: "#e5e7eb",
-                    borderRadius: 12,
-                    fontSize: 12,
-                    overflowX: "auto",
-                  }}
-                >
-                  {JSON.stringify(userProfile.dietary_prefs, null, 2)}
-                </pre>
+        {userProfile && (
+          <div className="pp-profile-card">
+            <div className="pp-profile-header">
+              <div className="pp-profile-avatar">
+                {(userProfile.name || "U").charAt(0).toUpperCase()}
               </div>
-            )}
+
+              <div>
+                <div className="pp-profile-name">{userProfile.name}</div>
+                {userProfile.email && (
+                  <div className="pp-profile-email">{userProfile.email}</div>
+                )}
+              </div>
+            </div>
+
+            <div className="pp-profile-grid">
+              <div className="pp-profile-stat">
+                <span className="pp-profile-label">Budget</span>
+                <span className="pp-profile-value">
+                  {userProfile.budget_style || "balanced"}
+                </span>
+              </div>
+
+              <div className="pp-profile-stat">
+                <span className="pp-profile-label">Household size</span>
+                <span className="pp-profile-value">
+                  {userProfile.household_size || 1}
+                </span>
+              </div>
+            </div>
+
+            <div className="pp-profile-section">
+              <div className="pp-profile-section-title">Diet</div>
+              <div className="pp-profile-pill-row">
+                <span className="pp-profile-pill">
+                  {userProfile.dietary_prefs?.diet || "none"}
+                </span>
+              </div>
+            </div>
+
+            <div className="pp-profile-section">
+              <div className="pp-profile-section-title">Allergies</div>
+              <div className="pp-profile-pill-row">
+                {(userProfile.dietary_prefs?.allergies || []).length ? (
+                  userProfile.dietary_prefs.allergies.map((item) => (
+                    <span key={item} className="pp-profile-pill">
+                      {item}
+                    </span>
+                  ))
+                ) : (
+                  <span className="pp-profile-empty">No allergies added</span>
+                )}
+              </div>
+            </div>
+
+            <div className="pp-profile-section">
+              <div className="pp-profile-section-title">Dislikes</div>
+              <div className="pp-profile-pill-row">
+                {(userProfile.dietary_prefs?.dislikes || []).length ? (
+                  userProfile.dietary_prefs.dislikes.map((item) => (
+                    <span key={item} className="pp-profile-pill">
+                      {item}
+                    </span>
+                  ))
+                ) : (
+                  <span className="pp-profile-empty">No dislikes added</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
           </PanelShell>
         )}

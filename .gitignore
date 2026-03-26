@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+## Additional ignores for PantryPal
+# Ignore the frontend build output, but not the source code
+
+!frontend/dist/
+!frontend/dist/**

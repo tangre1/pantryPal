@@ -1254,3 +1254,112 @@ body {
 .pp-selectedRecipeClose:hover{
   background: rgba(37,99,235,0.06);
 }
+
+.pp-profile-card {
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.pp-profile-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.pp-profile-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 20px;
+  color: #1d4ed8;
+  background: linear-gradient(180deg, #eef4ff 0%, #e4edff 100%);
+  border: 1px solid rgba(59, 130, 246, 0.12);
+}
+
+.pp-profile-name {
+  font-size: 18px;
+  font-weight: 800;
+  color: #172033;
+  line-height: 1.2;
+}
+
+.pp-profile-email {
+  margin-top: 4px;
+  font-size: 14px;
+  color: #64748b;
+  word-break: break-word;
+}
+
+.pp-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.pp-profile-stat {
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
+.pp-profile-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.pp-profile-value {
+  font-size: 16px;
+  font-weight: 800;
+  color: #172033;
+}
+
+.pp-profile-section + .pp-profile-section {
+  margin-top: 16px;
+}
+
+.pp-profile-section-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #64748b;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pp-profile-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pp-profile-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #f3f6fb;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pp-profile-empty {
+  font-size: 14px;
+  color: #94a3b8;
+}
