@@ -520,6 +520,43 @@ const fetchRecipes = async () => {
     await chatWithAssistant(trimmed);
   };
 
+  const handleUseRecipe = async (recipe) => {
+    if (!recipe) return;
+
+    setSelectedRecipe(recipe);
+
+    const ingredientsText = Array.isArray(recipe.ingredients)
+      ? recipe.ingredients
+          .map((item) =>
+            typeof item === "string" ? item : item?.name || JSON.stringify(item)
+          )
+          .join(", ")
+      : "Not provided";
+
+    const stepsText = Array.isArray(recipe.steps)
+      ? recipe.steps.join(" | ")
+      : "Not provided";
+
+    const tagsText = Array.isArray(recipe.tags) && recipe.tags.length
+      ? recipe.tags.join(", ")
+      : "none";
+
+    const prompt = `I want to make this recipe tonight:
+
+  Recipe: ${recipe.title}
+  Tags: ${tagsText}
+  Ingredients: ${ingredientsText}
+  Steps: ${stepsText}
+
+  Please help me with:
+  1. a short shopping list,
+  2. any missing pantry staples I may need,
+  3. simple cooking tips,
+  4. optional side dish ideas.`;
+
+    await sendTextToChat(prompt);
+  };
+
   // -----------------------------
   // Image analysis (returns extracted data)
   // -----------------------------
@@ -1064,15 +1101,18 @@ Keep it concise and practical.
             {!loadingRecipes && recipes.length > 0 && (
               <>
                 <div className="pp-recipeList">
+
                   {recipes.map((r) => {
                     const isActive = selectedRecipe?.id === r.id;
 
                     return (
-                      <button
+                      <div
                         key={r.id}
-                        type="button"
-                        className={`pp-card pp-recipeCardButton ${isActive ? "pp-recipeCardButtonActive" : ""}`}
+                        className={`pp-card pp-recipeCardButton ${
+                          isActive ? "pp-recipeCardButtonActive" : ""
+                        }`}
                         onClick={() => setSelectedRecipe(r)}
+                        style={{ cursor: "pointer" }}
                       >
                         <div className="pp-cardTitle">{r.title}</div>
 
@@ -1081,10 +1121,23 @@ Keep it concise and practical.
                         </div>
 
                         <div className="pp-muted">
-                          Ingredients: {Array.isArray(r.ingredients) ? r.ingredients.length : 0} •
-                          {" "}Steps: {Array.isArray(r.steps) ? r.steps.length : 0}
+                          Ingredients: {Array.isArray(r.ingredients) ? r.ingredients.length : 0} •{" "}
+                          Steps: {Array.isArray(r.steps) ? r.steps.length : 0}
                         </div>
-                      </button>
+
+                        <div style={{ height: 10 }} />
+
+                        <button
+                          type="button"
+                          className="pp-btn pp-btnPrimary"
+                          onClick={(e) => {
+                            e.stopPropagation(); // prevent card click
+                            handleUseRecipe(r);
+                          }}
+                        >
+                          Cook with PantryPal
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
