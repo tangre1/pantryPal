@@ -152,9 +152,61 @@ function PantryPalApp({ sessionUser, signOut }) {
   const [newRecipeIngredients, setNewRecipeIngredients] = useState("");
   const [newRecipeSteps, setNewRecipeSteps] = useState("");
   const [creatingRecipe, setCreatingRecipe] = useState(false);
-
-  const [user, setUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
   const [loadingUser, setLoadingUser] = useState(false);
+
+  function readStoredAccounts() {
+    try {
+      return JSON.parse(localStorage.getItem("pp_accounts") || "[]");
+    } catch {
+      return [];
+    }
+  }
+
+  const fetchUser = async () => {
+    setLoadingUser(true);
+    try {
+      const accounts = readStoredAccounts();
+      const match = Array.isArray(accounts)
+        ? accounts.find((a) => String(a.id) === String(sessionUser?.id))
+        : null;
+
+      if (!match) {
+        setUserProfile({
+          id: sessionUser?.id ?? null,
+          name: sessionUser?.name || "User",
+          email: sessionUser?.email || "",
+          budget_style: "balanced",
+          household_size: 1,
+          dietary_prefs: {
+            diet: "none",
+            allergies: [],
+            dislikes: [],
+          },
+        });
+        return;
+      }
+
+      setUserProfile({
+        id: match.id,
+        name: match.name || "User",
+        email: match.email || "",
+        budget_style: match.budget_style || "balanced",
+        household_size: match.household_size || 1,
+        dietary_prefs: match.dietary_prefs || {
+          diet: "none",
+          allergies: [],
+          dislikes: [],
+        },
+        created_at: match.created_at,
+      });
+    } catch (err) {
+      console.error("Failed to load local profile:", err);
+      setUserProfile(null);
+    } finally {
+      setLoadingUser(false);
+    }
+  };
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -401,24 +453,6 @@ const fetchRecipes = async () => {
     setCreatingRecipe(false);
   }
 };
-
-  // -----------------------------
-  // API: user (demo)
-  // -----------------------------
-  const fetchUser = async () => {
-    setLoadingUser(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/users/1`);
-      if (!res.ok) throw new Error("No user found yet");
-      const data = await res.json();
-      setUser(data);
-    } catch (err) {
-      console.warn("User not available yet:", err?.message || err);
-      setUser(null);
-    } finally {
-      setLoadingUser(false);
-    }
-  };
 
   useEffect(() => {
     fetchSnapshots();
@@ -1072,39 +1106,36 @@ Keep it concise and practical.
             onClose={closePanel}
           >
             <div className="pp-muted" style={{ marginBottom: 12 }}>
-              For demo purposes this tries to load user id <b>1</b>:
-              <div
-                style={{
-                  marginTop: 6,
-                  fontFamily: "monospace",
-                  fontSize: 12,
-                }}
-              >
-                GET /api/users/1
-              </div>
+              This panel shows the currently signed-in PantryPal account.
             </div>
 
             {loadingUser && <div className="pp-muted">Loading user…</div>}
 
-            {!loadingUser && !user && (
+            {!loadingUser && !userProfile && (
               <div className="pp-muted">
-                No user loaded yet. Create one via POST /api/users, or change
-                the fetchUser() function.
+                No user profile found for this signed-in account.
               </div>
             )}
 
-            {user && (
+            {userProfile && (
               <div className="pp-card">
-                <div style={{ fontWeight: 900, fontSize: 16 }}>{user.name}</div>
+                <div style={{ fontWeight: 900, fontSize: 16 }}>{userProfile.name}</div>
+
+                {userProfile.email && (
+                  <div className="pp-muted" style={{ marginTop: 6 }}>
+                    {userProfile.email}
+                  </div>
+                )}
 
                 <div
                   className="pp-muted"
-                  style={{ marginTop: 8, color: "var(--text)" }}
+                  style={{ marginTop: 10, color: "var(--text)" }}
                 >
-                  Budget: <b>{user.budget_style}</b>
+                  Budget: <b>{userProfile.budget_style}</b>
                 </div>
+
                 <div className="pp-muted" style={{ color: "var(--text)" }}>
-                  Household size: <b>{user.household_size}</b>
+                  Household size: <b>{userProfile.household_size}</b>
                 </div>
 
                 <div className="pp-muted" style={{ marginTop: 12 }}>
@@ -1122,10 +1153,11 @@ Keep it concise and practical.
                     overflowX: "auto",
                   }}
                 >
-                  {JSON.stringify(user.dietary_prefs, null, 2)}
+                  {JSON.stringify(userProfile.dietary_prefs, null, 2)}
                 </pre>
               </div>
             )}
+
           </PanelShell>
         )}
       </div>
