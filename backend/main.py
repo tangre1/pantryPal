@@ -63,12 +63,12 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "https://tangre1.github.io",
-    "https://tangre1.github.io/pantryPal",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+        "https://tangre1.github.io",
+        "https://tangre1.github.io",
     ],
-
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
